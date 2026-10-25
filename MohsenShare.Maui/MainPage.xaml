@@ -1,0 +1,133 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="MohsenShare.Maui.MainPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:models="clr-namespace:MohsenShare.Maui.Models"
+    xmlns:viewModels="clr-namespace:MohsenShare.Maui.ViewModels"
+    x:DataType="viewModels:MainViewModel"
+    Title="MohsenShare"
+    BackgroundColor="#F4F7FB">
+
+    <Grid Padding="24"
+          RowDefinitions="Auto,Auto,Auto,*"
+          RowSpacing="20">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="6">
+            <Label Text="MohsenShare"
+                   FontSize="30"
+                   FontAttributes="Bold"
+                   TextColor="#172554" />
+
+            <Label Text="انتقال سریع فایل بین دستگاه‌ها"
+                   FontSize="14"
+                   TextColor="#64748B" />
+        </VerticalStackLayout>
+
+        <Border Grid.Row="1"
+                BackgroundColor="White"
+                Stroke="#E2E8F0"
+                StrokeShape="RoundRectangle 16"
+                Padding="16">
+
+            <VerticalStackLayout Spacing="12">
+                <Label Text="وضعیت اتصال"
+                       FontAttributes="Bold"
+                       FontSize="16"
+                       TextColor="#172554" />
+
+                <Label Text="{Binding Status}"
+                       FontSize="14"
+                       TextColor="#475569" />
+
+                <Button Text="{Binding ScanButtonText}"
+                        Clicked="OnScanClicked"
+                        BackgroundColor="#2563EB"
+                        TextColor="White"
+                        CornerRadius="12"
+                        HeightRequest="50" />
+            </VerticalStackLayout>
+        </Border>
+
+        <Grid Grid.Row="2"
+              ColumnDefinitions="*,Auto">
+
+            <Label Text="دستگاه‌های پیدا شده"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   TextColor="#172554"
+                   VerticalOptions="Center" />
+
+            <Label Grid.Column="1"
+                   Text="{Binding Devices.Count}"
+                   FontSize="14"
+                   TextColor="#64748B"
+                   VerticalOptions="Center" />
+        </Grid>
+
+        <CollectionView Grid.Row="3"
+                        ItemsSource="{Binding Devices}"
+                        SelectionMode="None">
+
+            <CollectionView.EmptyView>
+                <VerticalStackLayout
+                    Spacing="10"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Center">
+
+                    <Label Text="⌁"
+                           FontSize="48"
+                           HorizontalTextAlignment="Center"
+                           TextColor="#94A3B8" />
+
+                    <Label Text="هنوز دستگاهی پیدا نشده"
+                           FontSize="16"
+                           TextColor="#64748B"
+                           HorizontalTextAlignment="Center" />
+
+                    <Label Text="MohsenShare را روی دستگاه دیگر اجرا کن."
+                           FontSize="13"
+                           TextColor="#94A3B8"
+                           HorizontalTextAlignment="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:DeviceInfo">
+                    <Border BackgroundColor="White"
+                            Stroke="#E2E8F0"
+                            StrokeShape="RoundRectangle 14"
+                            Padding="16"
+                            Margin="0,0,0,12">
+
+                        <Grid ColumnDefinitions="*,Auto"
+                              ColumnSpacing="12">
+
+                            <VerticalStackLayout Spacing="5">
+                                <Label Text="{Binding Name}"
+                                       FontSize="16"
+                                       FontAttributes="Bold"
+                                       TextColor="#172554" />
+
+                                <Label Text="{Binding Platform}"
+                                       FontSize="13"
+                                       TextColor="#64748B" />
+
+                                <Label Text="{Binding IpAddress}"
+                                       FontSize="13"
+                                       TextColor="#2563EB" />
+                            </VerticalStackLayout>
+
+                            <Label Grid.Column="1"
+                                   Text="●"
+                                   FontSize="14"
+                                   TextColor="#22C55E"
+                                   VerticalOptions="Center" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+        </CollectionView>
+    </Grid>
+</ContentPage>
