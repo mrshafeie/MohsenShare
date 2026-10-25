@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="MohsenShare.Maui.Views.ScanPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:zxing="clr-namespace:ZXing.Net.Maui.Controls;assembly=ZXing.Net.Maui.Controls"
+    Title="ارسال فایل"
+    BackgroundColor="#F4F7FB">
+
+    <VerticalStackLayout
+        Padding="20"
+        Spacing="16"
+        VerticalOptions="Center">
+
+        <Label
+            Text="ارسال فایل"
+            FontSize="24"
+            FontAttributes="Bold"
+            HorizontalTextAlignment="Center"
+            TextColor="#172554" />
+
+        <Label
+            Text="QR دستگاه دریافت‌کننده را اسکن کن"
+            HorizontalTextAlignment="Center"
+            TextColor="#64748B" />
+
+        <Border
+            Stroke="#E2E8F0"
+            StrokeShape="RoundRectangle 18"
+            BackgroundColor="White"
+            Padding="8"
+            HorizontalOptions="Center">
+
+            <zxing:CameraBarcodeReaderView
+                x:Name="CameraView"
+                HeightRequest="320"
+                WidthRequest="320"
+                BarcodesDetected="OnBarcodesDetected" />
+        </Border>
+
+        <Label
+            Text="برای اتصال، هر دو دستگاه باید از طریق شبکه محلی به هم دسترسی داشته باشند."
+            FontSize="13"
+            HorizontalTextAlignment="Center"
+            TextColor="#64748B" />
+
+        <Button
+            Text="لغو"
+            Clicked="OnCancelClicked"
+            BackgroundColor="#475569"
+            TextColor="White"
+            CornerRadius="12"
+            HeightRequest="48" />
+
+    </VerticalStackLayout>
+</ContentPage>

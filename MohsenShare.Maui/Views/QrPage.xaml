@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="MohsenShare.Maui.Views.QrPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="دریافت فایل"
+    BackgroundColor="#F4F7FB">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="24"
+            Spacing="18"
+            VerticalOptions="Center">
+
+            <Label
+                Text="دریافت فایل"
+                FontSize="26"
+                FontAttributes="Bold"
+                HorizontalTextAlignment="Center"
+                TextColor="#172554" />
+
+            <Label
+                Text="با گوشی دیگر این کد را اسکن کن"
+                FontSize="15"
+                HorizontalTextAlignment="Center"
+                TextColor="#64748B" />
+
+            <Border
+                BackgroundColor="White"
+                Stroke="#E2E8F0"
+                StrokeShape="RoundRectangle 20"
+                Padding="16"
+                HorizontalOptions="Center">
+
+                <Image
+                    x:Name="QrImage"
+                    HeightRequest="260"
+                    WidthRequest="260"
+                    Aspect="AspectFit" />
+            </Border>
+
+            <Label
+                Text="آدرس دستگاه"
+                FontAttributes="Bold"
+                TextColor="#172554" />
+
+            <Label
+                x:Name="AddressLabel"
+                FontSize="16"
+                HorizontalTextAlignment="Center"
+                TextColor="#2563EB" />
+
+            <Label
+                Text="کد اتصال برای ارسال دستی از کامپیوتر دیگر"
+                FontSize="13"
+                HorizontalTextAlignment="Center"
+                TextColor="#64748B" />
+
+            <Label
+                x:Name="TokenLabel"
+                FontSize="12"
+                HorizontalTextAlignment="Center"
+                TextColor="#475569" />
+
+            <Label
+                Text="پس از دریافت، فایل در پوشه خصوصی برنامه ذخیره می‌شود."
+                FontSize="13"
+                HorizontalTextAlignment="Center"
+                TextColor="#64748B" />
+
+            <Button
+                Text="توقف دریافت"
+                Clicked="OnStopClicked"
+                BackgroundColor="#DC2626"
+                TextColor="White"
+                CornerRadius="12"
+                HeightRequest="50" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

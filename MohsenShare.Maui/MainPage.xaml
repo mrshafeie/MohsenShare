@@ -11,7 +11,7 @@
 
     <Grid Padding="24"
           RowDefinitions="Auto,Auto,Auto,*"
-          RowSpacing="20">
+          RowSpacing="18">
 
         <VerticalStackLayout Grid.Row="0" Spacing="6">
             <Label Text="MohsenShare"
@@ -19,7 +19,7 @@
                    FontAttributes="Bold"
                    TextColor="#172554" />
 
-            <Label Text="انتقال سریع فایل بین دستگاه‌ها"
+            <Label Text="انتقال فایل بدون نیاز به اینترنت"
                    FontSize="14"
                    TextColor="#64748B" />
         </VerticalStackLayout>
@@ -31,21 +31,45 @@
                 Padding="16">
 
             <VerticalStackLayout Spacing="12">
-                <Label Text="وضعیت اتصال"
+
+                <Label Text="اتصال و انتقال فایل"
                        FontAttributes="Bold"
-                       FontSize="16"
+                       FontSize="18"
                        TextColor="#172554" />
 
                 <Label Text="{Binding Status}"
                        FontSize="14"
                        TextColor="#475569" />
 
+                <Button Text="دریافت فایل و نمایش QR"
+                        Clicked="OnReceiveClicked"
+                        BackgroundColor="#059669"
+                        TextColor="White"
+                        CornerRadius="12"
+                        HeightRequest="48" />
+
+                <Button x:Name="ScanQrButton"
+                        Text="ارسال فایل با اسکن QR"
+                        Clicked="OnSendClicked"
+                        BackgroundColor="#7C3AED"
+                        TextColor="White"
+                        CornerRadius="12"
+                        HeightRequest="48" />
+
+                <Button Text="اتصال دستی و ارسال فایل"
+                        Clicked="OnManualSendClicked"
+                        BackgroundColor="#475569"
+                        TextColor="White"
+                        CornerRadius="12"
+                        HeightRequest="48" />
+
                 <Button Text="{Binding ScanButtonText}"
                         Clicked="OnScanClicked"
                         BackgroundColor="#2563EB"
                         TextColor="White"
                         CornerRadius="12"
-                        HeightRequest="50" />
+                        HeightRequest="48" />
+
             </VerticalStackLayout>
         </Border>
 
@@ -85,7 +109,7 @@
                            TextColor="#64748B"
                            HorizontalTextAlignment="Center" />
 
-                    <Label Text="MohsenShare را روی دستگاه دیگر اجرا کن."
+                    <Label Text="می‌توانی از اتصال QR یا دستی استفاده کنی."
                            FontSize="13"
                            TextColor="#94A3B8"
                            HorizontalTextAlignment="Center" />
@@ -127,7 +151,6 @@
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
-
         </CollectionView>
     </Grid>
 </ContentPage>
