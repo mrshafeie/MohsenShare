@@ -3,154 +3,100 @@
     x:Class="MohsenShare.Maui.MainPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:models="clr-namespace:MohsenShare.Maui.Models"
-    xmlns:viewModels="clr-namespace:MohsenShare.Maui.ViewModels"
-    x:DataType="viewModels:MainViewModel"
     Title="MohsenShare"
     BackgroundColor="#F4F7FB">
 
     <Grid Padding="24"
-          RowDefinitions="Auto,Auto,Auto,*"
-          RowSpacing="18">
+          RowDefinitions="Auto,*,Auto"
+          RowSpacing="24">
 
-        <VerticalStackLayout Grid.Row="0" Spacing="6">
+        <VerticalStackLayout Grid.Row="0"
+                             Spacing="8"
+                             VerticalOptions="Center">
+
             <Label Text="MohsenShare"
-                   FontSize="30"
+                   FontSize="32"
                    FontAttributes="Bold"
                    TextColor="#172554" />
 
-            <Label Text="انتقال فایل بدون نیاز به اینترنت"
-                   FontSize="14"
+            <Label Text="انتقال فایل، ساده و مستقیم"
+                   FontSize="16"
+                   TextColor="#64748B" />
+
+            <Label Text="بدون نیاز به اینترنت"
+                   FontSize="13"
                    TextColor="#64748B" />
         </VerticalStackLayout>
 
-        <Border Grid.Row="1"
-                BackgroundColor="White"
-                Stroke="#E2E8F0"
-                StrokeShape="RoundRectangle 16"
-                Padding="16">
+        <VerticalStackLayout Grid.Row="1"
+                             Spacing="18"
+                             VerticalOptions="Center">
 
-            <VerticalStackLayout Spacing="12">
+            <Border BackgroundColor="White"
+                    Stroke="#DBEAFE"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 22"
+                    Padding="20">
 
-                <Label Text="اتصال و انتقال فایل"
-                       FontAttributes="Bold"
-                       FontSize="18"
-                       TextColor="#172554" />
+                <VerticalStackLayout Spacing="14">
 
-                <Label Text="{Binding Status}"
-                       FontSize="14"
-                       TextColor="#475569" />
+                    <Label Text="ارسال فایل"
+                           FontSize="23"
+                           FontAttributes="Bold"
+                           TextColor="#172554" />
 
-                <Button Text="دریافت فایل و نمایش QR"
-                        Clicked="OnReceiveClicked"
-                        BackgroundColor="#059669"
-                        TextColor="White"
-                        CornerRadius="12"
-                        HeightRequest="48" />
+                    <Label Text="فایل را انتخاب کن و به دستگاه مقصد بفرست."
+                           FontSize="14"
+                           TextColor="#64748B" />
 
-                <Button x:Name="ScanQrButton"
-                        Text="ارسال فایل با اسکن QR"
-                        Clicked="OnSendClicked"
-                        BackgroundColor="#7C3AED"
-                        TextColor="White"
-                        CornerRadius="12"
-                        HeightRequest="48" />
+                    <Button Text="ارسال فایل"
+                            Clicked="OnSendClicked"
+                            HeightRequest="58"
+                            CornerRadius="16"
+                            FontSize="17"
+                            FontAttributes="Bold"
+                            BackgroundColor="#2563EB"
+                            TextColor="White" />
 
-                <Button Text="اتصال دستی و ارسال فایل"
-                        Clicked="OnManualSendClicked"
-                        BackgroundColor="#475569"
-                        TextColor="White"
-                        CornerRadius="12"
-                        HeightRequest="48" />
-
-                <Button Text="{Binding ScanButtonText}"
-                        Clicked="OnScanClicked"
-                        BackgroundColor="#2563EB"
-                        TextColor="White"
-                        CornerRadius="12"
-                        HeightRequest="48" />
-
-            </VerticalStackLayout>
-        </Border>
-
-        <Grid Grid.Row="2"
-              ColumnDefinitions="*,Auto">
-
-            <Label Text="دستگاه‌های پیدا شده"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   TextColor="#172554"
-                   VerticalOptions="Center" />
-
-            <Label Grid.Column="1"
-                   Text="{Binding Devices.Count}"
-                   FontSize="14"
-                   TextColor="#64748B"
-                   VerticalOptions="Center" />
-        </Grid>
-
-        <CollectionView Grid.Row="3"
-                        ItemsSource="{Binding Devices}"
-                        SelectionMode="None">
-
-            <CollectionView.EmptyView>
-                <VerticalStackLayout
-                    Spacing="10"
-                    VerticalOptions="Center"
-                    HorizontalOptions="Center">
-
-                    <Label Text="⌁"
-                           FontSize="48"
-                           HorizontalTextAlignment="Center"
-                           TextColor="#94A3B8" />
-
-                    <Label Text="هنوز دستگاهی پیدا نشده"
-                           FontSize="16"
-                           TextColor="#64748B"
-                           HorizontalTextAlignment="Center" />
-
-                    <Label Text="می‌توانی از اتصال QR یا دستی استفاده کنی."
-                           FontSize="13"
-                           TextColor="#94A3B8"
-                           HorizontalTextAlignment="Center" />
                 </VerticalStackLayout>
-            </CollectionView.EmptyView>
+            </Border>
 
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:DeviceInfo">
-                    <Border BackgroundColor="White"
-                            Stroke="#E2E8F0"
-                            StrokeShape="RoundRectangle 14"
-                            Padding="16"
-                            Margin="0,0,0,12">
+            <Border BackgroundColor="White"
+                    Stroke="#D1FAE5"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 22"
+                    Padding="20">
 
-                        <Grid ColumnDefinitions="*,Auto"
-                              ColumnSpacing="12">
+                <VerticalStackLayout Spacing="14">
 
-                            <VerticalStackLayout Spacing="5">
-                                <Label Text="{Binding Name}"
-                                       FontSize="16"
-                                       FontAttributes="Bold"
-                                       TextColor="#172554" />
+                    <Label Text="دریافت فایل"
+                           FontSize="23"
+                           FontAttributes="Bold"
+                           TextColor="#172554" />
 
-                                <Label Text="{Binding Platform}"
-                                       FontSize="13"
-                                       TextColor="#64748B" />
+                    <Label Text="دستگاهت را برای دریافت فایل آماده کن."
+                           FontSize="14"
+                           TextColor="#64748B" />
 
-                                <Label Text="{Binding IpAddress}"
-                                       FontSize="13"
-                                       TextColor="#2563EB" />
-                            </VerticalStackLayout>
+                    <Button Text="دریافت فایل"
+                            Clicked="OnReceiveClicked"
+                            HeightRequest="58"
+                            CornerRadius="16"
+                            FontSize="17"
+                            FontAttributes="Bold"
+                            BackgroundColor="#059669"
+                            TextColor="White" />
 
-                            <Label Grid.Column="1"
-                                   Text="●"
-                                   FontSize="14"
-                                   TextColor="#22C55E"
-                                   VerticalOptions="Center" />
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+
+        <Label Grid.Row="2"
+               Text="MohsenShare · انتقال محلی و مستقیم"
+               FontSize="12"
+               TextColor="#94A3B8"
+               HorizontalTextAlignment="Center" />
+
     </Grid>
 </ContentPage>

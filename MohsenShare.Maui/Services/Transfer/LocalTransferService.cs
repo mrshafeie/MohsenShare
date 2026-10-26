@@ -1,5 +1,4 @@
-﻿
-using QRCoder;
+﻿using QRCoder;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -15,9 +14,12 @@ public sealed class LocalTransferService
 
     private const long MaxFileSize = 10L * 1024 * 1024 * 1024;
 
+    private const string LocalDiscoveryTransferMode = "LAN";
+
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _receiveTask;
+
     private string? _token;
 
     public event EventHandler<string>? FileReceived;
@@ -29,6 +31,7 @@ public sealed class LocalTransferService
         string Token);
 
     private sealed record TransferHeader(
+        string Mode,
         string Token,
         string FileName,
         long Length);
@@ -38,24 +41,31 @@ public sealed class LocalTransferService
     {
         await StopAsync();
 
-        IPAddress ip = preferredAddress ?? GetLocalIPv4();
+        IPAddress ip =
+            preferredAddress ??
+            GetLocalIPv4();
 
         if (ip.AddressFamily != AddressFamily.InterNetwork ||
             IPAddress.IsLoopback(ip) ||
             !IsPrivateIPv4(ip))
         {
             throw new InvalidOperationException(
-                "آدرس IP باید یک آدرس IPv4 خصوصی و قابل‌دسترسی در شبکه محلی باشد.");
+                "آدرس IP باید یک IPv4 خصوصی و قابل‌دسترسی در شبکه محلی باشد.");
         }
 
         _token = Convert.ToHexString(
             RandomNumberGenerator.GetBytes(32));
 
-        _listener = new TcpListener(IPAddress.Any, TransferPort);
+        _listener = new TcpListener(
+            IPAddress.Any,
+            TransferPort);
+
         _listener.Start();
 
         _cts = new CancellationTokenSource();
-        _receiveTask = ReceiveLoopAsync(_cts.Token);
+
+        _receiveTask = ReceiveLoopAsync(
+            _cts.Token);
 
         var info = new ConnectionInfo(
             "MohsenShare",
@@ -63,19 +73,27 @@ public sealed class LocalTransferService
             TransferPort,
             _token);
 
-        string json = JsonSerializer.Serialize(info);
+        string json =
+            JsonSerializer.Serialize(info);
 
-        using var generator = new QRCodeGenerator();
+        using var generator =
+            new QRCodeGenerator();
 
-        using var data = generator.CreateQrCode(
-            json,
-            QRCodeGenerator.ECCLevel.Q);
+        using var data =
+            generator.CreateQrCode(
+                json,
+                QRCodeGenerator.ECCLevel.Q);
 
-        using var qr = new PngByteQRCode(data);
+        using var qr =
+            new PngByteQRCode(data);
 
-        byte[] png = qr.GetGraphic(10);
+        byte[] png =
+            qr.GetGraphic(10);
 
-        return (png, $"{ip}:{TransferPort}", _token);
+        return (
+            png,
+            $"{ip}:{TransferPort}",
+            _token);
     }
 
     public async Task SendFileAsync(
@@ -85,8 +103,11 @@ public sealed class LocalTransferService
         string filePath,
         CancellationToken cancellationToken = default)
     {
-        if (!IPAddress.TryParse(ip, out var address) ||
-            address.AddressFamily != AddressFamily.InterNetwork)
+        if (!IPAddress.TryParse(
+                ip,
+                out var address) ||
+            address.AddressFamily !=
+            AddressFamily.InterNetwork)
         {
             throw new ArgumentException(
                 "آدرس IPv4 معتبر نیست.",
@@ -95,14 +116,8 @@ public sealed class LocalTransferService
 
         if (port is < 1 or > 65535)
         {
-            throw new ArgumentOutOfRangeException(nameof(port));
-        }
-
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            throw new ArgumentException(
-                "کد اتصال معتبر نیست.",
-                nameof(token));
+            throw new ArgumentOutOfRangeException(
+                nameof(port));
         }
 
         if (!File.Exists(filePath))
@@ -112,13 +127,14 @@ public sealed class LocalTransferService
                 filePath);
         }
 
-        await using var file = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            81920,
-            useAsync: true);
+        await using var file =
+            new FileStream(
+                filePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                81920,
+                useAsync: true);
 
         if (file.Length > MaxFileSize)
         {
@@ -126,22 +142,48 @@ public sealed class LocalTransferService
                 "حجم فایل بیشتر از حد مجاز است.");
         }
 
-        using var client = new TcpClient();
+        using var client =
+            new TcpClient();
 
         await client.ConnectAsync(
             address,
             port,
             cancellationToken);
 
-        await using NetworkStream stream = client.GetStream();
+        await using NetworkStream stream =
+            client.GetStream();
 
-        var header = new TransferHeader(
-            token,
-            Path.GetFileName(filePath),
-            file.Length);
+        /*
+         * اگر Token داشته باشیم:
+         *
+         * گوشی ↔ گوشی
+         * گوشی ↔ کامپیوتر
+         * کامپیوتر ↔ گوشی
+         *
+         * با Token احراز می‌شوند.
+         *
+         * اگر Token خالی باشد:
+         *
+         * کامپیوتر ↔ کامپیوتر
+         *
+         * از Discovery داخلی شبکه استفاده می‌کند.
+         */
+        string mode =
+            string.IsNullOrWhiteSpace(token)
+                ? LocalDiscoveryTransferMode
+                : "QR";
 
-        byte[] headerBytes = Encoding.UTF8.GetBytes(
-            JsonSerializer.Serialize(header) + "\n");
+        var header =
+            new TransferHeader(
+                mode,
+                token?.Trim() ?? string.Empty,
+                Path.GetFileName(filePath),
+                file.Length);
+
+        byte[] headerBytes =
+            Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(header) +
+                "\n");
 
         await stream.WriteAsync(
             headerBytes,
@@ -152,7 +194,8 @@ public sealed class LocalTransferService
             81920,
             cancellationToken);
 
-        await stream.FlushAsync(cancellationToken);
+        await stream.FlushAsync(
+            cancellationToken);
     }
 
     private async Task ReceiveLoopAsync(
@@ -169,65 +212,107 @@ public sealed class LocalTransferService
 
             try
             {
-                client = await listener.AcceptTcpClientAsync(
-                    cancellationToken);
+                client =
+                    await listener.AcceptTcpClientAsync(
+                        cancellationToken);
 
-                await using NetworkStream stream = client.GetStream();
+                await using NetworkStream stream =
+                    client.GetStream();
 
-                string? line = await ReadLineAsync(
-                    stream,
-                    cancellationToken);
+                string? line =
+                    await ReadLineAsync(
+                        stream,
+                        cancellationToken);
 
                 if (string.IsNullOrWhiteSpace(line))
                     continue;
 
-                var header = JsonSerializer.Deserialize<TransferHeader>(
-                    line);
+                TransferHeader? header;
 
-                if (header is null ||
-                    string.IsNullOrWhiteSpace(header.FileName) ||
-                    header.Length < 0 ||
-                    header.Length > MaxFileSize ||
-                    !IsValidToken(header.Token))
+                try
+                {
+                    header =
+                        JsonSerializer.Deserialize<TransferHeader>(
+                            line);
+                }
+                catch (JsonException)
                 {
                     continue;
                 }
 
-                string folder = Path.Combine(
-                    FileSystem.Current.AppDataDirectory,
-                    "ReceivedFiles");
+                if (header is null)
+                    continue;
+
+                if (string.IsNullOrWhiteSpace(
+                        header.FileName))
+                {
+                    continue;
+                }
+
+                if (header.Length < 0 ||
+                    header.Length > MaxFileSize)
+                {
+                    continue;
+                }
+
+                if (!IsConnectionAuthorized(header))
+                {
+                    continue;
+                }
+
+                string folder =
+                    Path.Combine(
+                        FileSystem.Current.AppDataDirectory,
+                        "ReceivedFiles");
 
                 Directory.CreateDirectory(folder);
 
-                string safeName = Path.GetFileName(header.FileName);
+                string safeName =
+                    Path.GetFileName(
+                        header.FileName);
 
-                if (string.IsNullOrWhiteSpace(safeName))
-                    continue;
-
-                string destination = Path.Combine(
-                    folder,
-                    $"{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}_{safeName}");
-
-                await using (var output = new FileStream(
-                    destination,
-                    FileMode.CreateNew,
-                    FileAccess.Write,
-                    FileShare.None,
-                    81920,
-                    useAsync: true))
+                if (string.IsNullOrWhiteSpace(
+                        safeName))
                 {
-                    byte[] buffer = new byte[81920];
-                    long remaining = header.Length;
+                    continue;
+                }
+
+                string destination =
+                    Path.Combine(
+                        folder,
+                        $"{DateTime.Now:yyyyMMdd_HHmmss}_" +
+                        $"{Guid.NewGuid():N}_" +
+                        safeName);
+
+                await using (
+                    var output =
+                        new FileStream(
+                            destination,
+                            FileMode.CreateNew,
+                            FileAccess.Write,
+                            FileShare.None,
+                            81920,
+                            useAsync: true))
+                {
+                    byte[] buffer =
+                        new byte[81920];
+
+                    long remaining =
+                        header.Length;
 
                     while (remaining > 0)
                     {
-                        int count = (int)Math.Min(
-                            buffer.Length,
-                            remaining);
+                        int count =
+                            (int)Math.Min(
+                                buffer.Length,
+                                remaining);
 
-                        int read = await stream.ReadAsync(
-                            buffer.AsMemory(0, count),
-                            cancellationToken);
+                        int read =
+                            await stream.ReadAsync(
+                                buffer.AsMemory(
+                                    0,
+                                    count),
+                                cancellationToken);
 
                         if (read == 0)
                         {
@@ -236,14 +321,18 @@ public sealed class LocalTransferService
                         }
 
                         await output.WriteAsync(
-                            buffer.AsMemory(0, read),
+                            buffer.AsMemory(
+                                0,
+                                read),
                             cancellationToken);
 
                         remaining -= read;
                     }
                 }
 
-                FileReceived?.Invoke(this, destination);
+                FileReceived?.Invoke(
+                    this,
+                    destination);
             }
             catch (OperationCanceledException)
                 when (cancellationToken.IsCancellationRequested)
@@ -271,23 +360,67 @@ public sealed class LocalTransferService
         }
     }
 
-    private bool IsValidToken(string suppliedToken)
+    private bool IsConnectionAuthorized(
+        TransferHeader header)
     {
-        if (string.IsNullOrWhiteSpace(_token) ||
-            string.IsNullOrWhiteSpace(suppliedToken))
+        /*
+         * PC ↔ PC
+         *
+         * Discovery قبلاً دستگاه مقصد را پیدا کرده
+         * و اتصال مستقیماً به TransferPort انجام می‌شود.
+         */
+        if (string.Equals(
+                header.Mode,
+                LocalDiscoveryTransferMode,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        /*
+         * QR connection
+         *
+         * برای گوشی و اتصال QR همچنان Token الزامی است.
+         */
+        if (string.Equals(
+                header.Mode,
+                "QR",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return IsValidToken(
+                header.Token);
+        }
+
+        return false;
+    }
+
+    private bool IsValidToken(
+        string suppliedToken)
+    {
+        if (string.IsNullOrWhiteSpace(
+                _token) ||
+            string.IsNullOrWhiteSpace(
+                suppliedToken))
         {
             return false;
         }
 
         try
         {
-            byte[] expected = Convert.FromHexString(_token);
-            byte[] supplied = Convert.FromHexString(suppliedToken);
+            byte[] expected =
+                Convert.FromHexString(
+                    _token);
 
-            return expected.Length == supplied.Length &&
-                   CryptographicOperations.FixedTimeEquals(
-                       expected,
-                       supplied);
+            byte[] supplied =
+                Convert.FromHexString(
+                    suppliedToken);
+
+            return expected.Length ==
+                       supplied.Length &&
+                   CryptographicOperations
+                       .FixedTimeEquals(
+                           expected,
+                           supplied);
         }
         catch (FormatException)
         {
@@ -299,25 +432,31 @@ public sealed class LocalTransferService
         Stream stream,
         CancellationToken cancellationToken)
     {
-        using var buffer = new MemoryStream();
-        byte[] oneByte = new byte[1];
+        using var buffer =
+            new MemoryStream();
+
+        byte[] oneByte =
+            new byte[1];
 
         while (buffer.Length < 8192)
         {
-            int read = await stream.ReadAsync(
-                oneByte.AsMemory(),
-                cancellationToken);
+            int read =
+                await stream.ReadAsync(
+                    oneByte.AsMemory(),
+                    cancellationToken);
 
             if (read == 0)
                 return null;
 
-            if (oneByte[0] == (byte)'\n')
+            if (oneByte[0] ==
+                (byte)'\n')
             {
                 return Encoding.UTF8.GetString(
                     buffer.ToArray());
             }
 
-            buffer.WriteByte(oneByte[0]);
+            buffer.WriteByte(
+                oneByte[0]);
         }
 
         throw new InvalidDataException(
@@ -326,86 +465,113 @@ public sealed class LocalTransferService
 
     private static IPAddress GetLocalIPv4()
     {
-        var candidates = NetworkInterface
-            .GetAllNetworkInterfaces()
-            .Where(n =>
-                n.OperationalStatus == OperationalStatus.Up &&
-                n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-            .SelectMany(n =>
-                n.GetIPProperties().UnicastAddresses
-                    .Where(a =>
-                        a.Address.AddressFamily ==
-                        AddressFamily.InterNetwork)
-                    .Select(a => new
-                    {
-                        Interface = n,
-                        Address = a.Address
-                    }))
-            .Where(x =>
-                !IPAddress.IsLoopback(x.Address) &&
-                IsPrivateIPv4(x.Address))
-            .ToList();
+        var candidates =
+            NetworkInterface
+                .GetAllNetworkInterfaces()
+                .Where(n =>
+                    n.OperationalStatus ==
+                    OperationalStatus.Up &&
+                    n.NetworkInterfaceType !=
+                    NetworkInterfaceType.Loopback)
+                .SelectMany(n =>
+                    n.GetIPProperties()
+                        .UnicastAddresses
+                        .Where(a =>
+                            a.Address.AddressFamily ==
+                            AddressFamily.InterNetwork)
+                        .Select(a =>
+                            new
+                            {
+                                Interface = n,
+                                Address = a.Address
+                            }))
+                .Where(x =>
+                    !IPAddress.IsLoopback(
+                        x.Address) &&
+                    IsPrivateIPv4(
+                        x.Address))
+                .ToList();
 
-        // آدرس‌های رایج هات‌اسپات را فقط در صورتی انتخاب کن
-        // که واقعاً روی یکی از رابط‌های فعال دستگاه وجود داشته باشند.
         string[] preferredAddresses =
         {
             "192.168.49.1",
             "192.168.43.1"
         };
 
-        foreach (string preferred in preferredAddresses)
+        foreach (string preferred
+                 in preferredAddresses)
         {
-            var match = candidates.FirstOrDefault(
-                x => x.Address.ToString() == preferred);
+            var match =
+                candidates.FirstOrDefault(
+                    x =>
+                        x.Address.ToString() ==
+                        preferred);
 
             if (match is not null)
                 return match.Address;
         }
 
-        // رابط‌های Wi-Fi را نسبت به رابط‌های دیگر اولویت بده.
-        var wireless = candidates.FirstOrDefault(
-            x => x.Interface.NetworkInterfaceType ==
-                 NetworkInterfaceType.Wireless80211);
+        var wireless =
+            candidates.FirstOrDefault(
+                x =>
+                    x.Interface
+                        .NetworkInterfaceType ==
+                    NetworkInterfaceType
+                        .Wireless80211);
 
         if (wireless is not null)
             return wireless.Address;
 
-        // آداپتورهای مجازی رایج ویندوز را در اولویت پایین‌تر قرار بده.
-        var nonVirtual = candidates.FirstOrDefault(x =>
-        {
-            string name = x.Interface.Name.ToLowerInvariant();
-            string description =
-                x.Interface.Description.ToLowerInvariant();
+        var nonVirtual =
+            candidates.FirstOrDefault(x =>
+            {
+                string name =
+                    x.Interface.Name
+                        .ToLowerInvariant();
 
-            return !name.Contains("virtual") &&
-                   !name.Contains("vethernet") &&
-                   !name.Contains("loopback") &&
-                   !description.Contains("virtual") &&
-                   !description.Contains("loopback");
-        });
+                string description =
+                    x.Interface.Description
+                        .ToLowerInvariant();
+
+                return
+                    !name.Contains("virtual") &&
+                    !name.Contains("vethernet") &&
+                    !name.Contains("loopback") &&
+                    !description.Contains("virtual") &&
+                    !description.Contains("loopback");
+            });
 
         if (nonVirtual is not null)
             return nonVirtual.Address;
 
-        return candidates.FirstOrDefault()?.Address
+        return candidates
+            .FirstOrDefault()
+            ?.Address
             ?? throw new InvalidOperationException(
                 "IP خصوصی شبکه پیدا نشد. اتصال Wi-Fi یا هات‌اسپات را بررسی کن.");
     }
 
-    private static bool IsPrivateIPv4(IPAddress address)
+    private static bool IsPrivateIPv4(
+        IPAddress address)
     {
-        if (address.AddressFamily != AddressFamily.InterNetwork)
+        if (address.AddressFamily !=
+            AddressFamily.InterNetwork)
+        {
             return false;
+        }
 
-        byte[] bytes = address.GetAddressBytes();
+        byte[] bytes =
+            address.GetAddressBytes();
 
-        return bytes[0] == 10 ||
-               (bytes[0] == 172 &&
-                bytes[1] >= 16 &&
-                bytes[1] <= 31) ||
-               (bytes[0] == 192 &&
-                bytes[1] == 168);
+        return
+            bytes[0] == 10 ||
+
+            (bytes[0] == 172 &&
+             bytes[1] >= 16 &&
+             bytes[1] <= 31) ||
+
+            (bytes[0] == 192 &&
+             bytes[1] == 168);
     }
 
     public async Task StopAsync()
@@ -437,7 +603,9 @@ public sealed class LocalTransferService
         }
 
         _receiveTask = null;
+
         cts.Dispose();
+
         _token = null;
     }
 }

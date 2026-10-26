@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    x:Class="MohsenShare.Maui.Views.DeviceSelectionPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="انتخاب دستگاه"
+    BackgroundColor="#F4F7FB">
+
+    <Grid
+        Padding="20"
+        RowDefinitions="Auto,Auto,*,Auto"
+        RowSpacing="16">
+
+        <VerticalStackLayout
+            Grid.Row="0"
+            Spacing="6">
+
+            <Label
+                Text="انتخاب دستگاه"
+                FontSize="28"
+                FontAttributes="Bold"
+                TextColor="#172554" />
+
+            <Label
+                Text="دستگاه مقصد را انتخاب کن."
+                FontSize="15"
+                TextColor="#64748B" />
+
+        </VerticalStackLayout>
+
+        <Border
+            Grid.Row="1"
+            Padding="16"
+            BackgroundColor="White"
+            Stroke="#DBEAFE"
+            StrokeThickness="1"
+            StrokeShape="RoundRectangle 18">
+
+            <HorizontalStackLayout
+                Spacing="12">
+
+                <ActivityIndicator
+                    IsRunning="{Binding IsScanning}"
+                    IsVisible="{Binding IsScanning}"
+                    VerticalOptions="Center"
+                    Color="#2563EB" />
+
+                <Label
+                    Text="{Binding Status}"
+                    FontSize="14"
+                    TextColor="#475569"
+                    VerticalOptions="Center" />
+
+            </HorizontalStackLayout>
+
+        </Border>
+
+        <CollectionView
+            Grid.Row="2"
+            ItemsSource="{Binding Devices}"
+            SelectionMode="Single"
+            SelectionChanged="OnDeviceSelected">
+
+            <CollectionView.EmptyView>
+
+                <VerticalStackLayout
+                    Spacing="10"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Center">
+
+                    <Label
+                        Text="دستگاهی پیدا نشد"
+                        FontSize="20"
+                        FontAttributes="Bold"
+                        TextColor="#334155"
+                        HorizontalTextAlignment="Center" />
+
+                    <Label
+                        Text="مطمئن شو هر دو دستگاه به یک شبکه محلی متصل هستند."
+                        FontSize="14"
+                        TextColor="#64748B"
+                        HorizontalTextAlignment="Center" />
+
+                </VerticalStackLayout>
+
+            </CollectionView.EmptyView>
+
+            <CollectionView.ItemTemplate>
+
+                <DataTemplate>
+
+                    <Border
+                        Margin="0,0,0,12"
+                        Padding="16"
+                        BackgroundColor="White"
+                        Stroke="#E2E8F0"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 18">
+
+                        <Grid
+                            ColumnDefinitions="Auto,*,Auto"
+                            ColumnSpacing="14">
+
+                            <Border
+                                WidthRequest="52"
+                                HeightRequest="52"
+                                BackgroundColor="#EFF6FF"
+                                StrokeThickness="0"
+                                StrokeShape="RoundRectangle 14">
+
+                                <Label
+                                    Text="💻"
+                                    FontSize="25"
+                                    HorizontalTextAlignment="Center"
+                                    VerticalTextAlignment="Center" />
+
+                            </Border>
+
+                            <VerticalStackLayout
+                                Grid.Column="1"
+                                VerticalOptions="Center"
+                                Spacing="3">
+
+                                <Label
+                                    Text="{Binding Name}"
+                                    FontSize="17"
+                                    FontAttributes="Bold"
+                                    TextColor="#172554" />
+
+                                <Label
+                                    Text="{Binding Platform}"
+                                    FontSize="13"
+                                    TextColor="#64748B" />
+
+                                <Label
+                                    Text="{Binding IpAddress}"
+                                    FontSize="12"
+                                    TextColor="#94A3B8" />
+
+                            </VerticalStackLayout>
+
+                            <Label
+                                Grid.Column="2"
+                                Text="›"
+                                FontSize="30"
+                                TextColor="#2563EB"
+                                VerticalOptions="Center" />
+
+                        </Grid>
+
+                    </Border>
+
+                </DataTemplate>
+
+            </CollectionView.ItemTemplate>
+
+        </CollectionView>
+
+        <Button
+            Grid.Row="3"
+            Text="لغو"
+            Clicked="OnCancelClicked"
+            HeightRequest="52"
+            CornerRadius="15"
+            BackgroundColor="#475569"
+            TextColor="White"
+            FontSize="16"
+            FontAttributes="Bold" />
+
+    </Grid>
+
+</ContentPage>
