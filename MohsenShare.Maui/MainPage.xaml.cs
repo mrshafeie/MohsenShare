@@ -4,6 +4,10 @@ using MohsenShare.Maui.ViewModels;
 using MohsenShare.Maui.Views;
 using System.Net;
 
+#if ANDROID
+using MohsenShare.Maui.Platforms.Android;
+#endif
+
 namespace MohsenShare.Maui;
 
 public partial class MainPage : ContentPage
@@ -11,18 +15,29 @@ public partial class MainPage : ContentPage
     private readonly MainViewModel _viewModel;
     private readonly LocalTransferService _transfer;
 
+#if ANDROID
+    private readonly LocalOnlyHotspotService _hotspot;
+#endif
+
     public MainPage(
         MainViewModel viewModel,
-        LocalTransferService transfer)
+        LocalTransferService transfer
+#if ANDROID
+        , LocalOnlyHotspotService hotspot
+#endif
+        )
     {
         InitializeComponent();
 
         _viewModel = viewModel;
         _transfer = transfer;
 
+#if ANDROID
+        _hotspot = hotspot;
+#endif
+
         BindingContext = _viewModel;
 
-        // در ویندوز اتصال دستی وجود دارد؛ اسکن QR را به گوشی بسپار.
         ScanQrButton.IsVisible =
             DeviceInfo.Platform != DevicePlatform.WinUI;
     }
@@ -36,17 +51,40 @@ public partial class MainPage : ContentPage
     {
         try
         {
+#if ANDROID
+            var hotspotInfo = await _hotspot.StartAsync();
+
+            await DisplayAlertAsync(
+                "شبکه محلی آماده است",
+                $"در ویندوز به شبکه زیر وصل شو:\n\n" +
+                $"نام شبکه: {hotspotInfo.Ssid}\n" +
+                $"رمز شبکه: {hotspotInfo.Password}\n\n" +
+                "این شبکه برای ارتباط مستقیم محلی است و به اینترنت نیاز ندارد.",
+                "ادامه");
+#endif
+
             var result = await _transfer.StartReceiverAsync();
+
+            Action? stopNetwork = null;
+
+#if ANDROID
+            stopNetwork = _hotspot.Stop;
+#endif
 
             await Navigation.PushModalAsync(
                 new QrPage(
                     _transfer,
                     result.QrPng,
                     result.Address,
-                    result.Token));
+                    result.Token,
+                    stopNetwork));
         }
         catch (Exception ex)
         {
+#if ANDROID
+            _hotspot.Stop();
+#endif
+
             await DisplayAlertAsync(
                 "خطا در شروع دریافت",
                 ex.Message,
@@ -56,8 +94,7 @@ public partial class MainPage : ContentPage
 
     private async void OnSendClicked(object sender, EventArgs e)
     {
-        await Navigation.PushModalAsync(
-            new ScanPage(_transfer));
+        await Navigation.PushModalAsync(new ScanPage(_transfer));
     }
 
     private async void OnManualSendClicked(
@@ -107,7 +144,7 @@ public partial class MainPage : ContentPage
 
             var file = await FilePicker.Default.PickAsync();
 
-            if (file == null)
+            if (file is null)
                 return;
 
             string tempPath = Path.Combine(
@@ -134,7 +171,7 @@ public partial class MainPage : ContentPage
                     token.Trim(),
                     tempPath);
 
-                await DisplayAlert(
+                await DisplayAlertAsync(
                     "ارسال موفق",
                     $"فایل «{file.FileName}» ارسال شد.",
                     "باشه");

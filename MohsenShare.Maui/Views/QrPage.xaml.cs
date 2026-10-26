@@ -6,17 +6,20 @@ namespace MohsenShare.Maui.Views;
 public partial class QrPage : ContentPage
 {
     private readonly LocalTransferService _transfer;
+    private readonly Action? _stopNetwork;
     private bool _stopped;
 
     public QrPage(
         LocalTransferService transfer,
         byte[] qrPng,
         string address,
-        string token)
+        string token,
+        Action? stopNetwork = null)
     {
         InitializeComponent();
 
         _transfer = transfer;
+        _stopNetwork = stopNetwork;
 
         QrImage.Source = ImageSource.FromStream(
             () => new MemoryStream(qrPng));
@@ -33,7 +36,8 @@ public partial class QrPage : ContentPage
         {
             await DisplayAlertAsync(
                 "دریافت موفق",
-                $"فایل دریافت شد:\n{Path.GetFileName(path)}\n\nمحل ذخیره:\n{path}",
+                $"فایل دریافت شد:\n{Path.GetFileName(path)}\n\n" +
+                $"محل ذخیره:\n{path}",
                 "باشه");
         });
     }
@@ -53,6 +57,7 @@ public partial class QrPage : ContentPage
         _transfer.FileReceived -= OnFileReceived;
 
         await _transfer.StopAsync();
+        _stopNetwork?.Invoke();
 
         await Navigation.PopModalAsync();
     }
@@ -61,13 +66,14 @@ public partial class QrPage : ContentPage
     {
         base.OnDisappearing();
 
-        if (!_stopped)
-        {
-            _stopped = true;
+        if (_stopped)
+            return;
 
-            _transfer.FileReceived -= OnFileReceived;
+        _stopped = true;
 
-            await _transfer.StopAsync();
-        }
+        _transfer.FileReceived -= OnFileReceived;
+
+        await _transfer.StopAsync();
+        _stopNetwork?.Invoke();
     }
 }

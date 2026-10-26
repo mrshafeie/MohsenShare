@@ -34,11 +34,19 @@ public sealed class LocalTransferService
         long Length);
 
     public async Task<(byte[] QrPng, string Address, string Token)>
-        StartReceiverAsync()
+        StartReceiverAsync(IPAddress? preferredAddress = null)
     {
         await StopAsync();
 
-        IPAddress ip = GetLocalIPv4();
+        IPAddress ip = preferredAddress ?? GetLocalIPv4();
+
+        if (ip.AddressFamily != AddressFamily.InterNetwork ||
+            IPAddress.IsLoopback(ip) ||
+            !IsPrivateIPv4(ip))
+        {
+            throw new InvalidOperationException(
+                "آدرس IP باید یک آدرس IPv4 خصوصی و قابل‌دسترسی در شبکه محلی باشد.");
+        }
 
         _token = Convert.ToHexString(
             RandomNumberGenerator.GetBytes(32));
@@ -77,14 +85,32 @@ public sealed class LocalTransferService
         string filePath,
         CancellationToken cancellationToken = default)
     {
-        if (!IPAddress.TryParse(ip, out _))
-            throw new ArgumentException("آدرس IP معتبر نیست.", nameof(ip));
+        if (!IPAddress.TryParse(ip, out var address) ||
+            address.AddressFamily != AddressFamily.InterNetwork)
+        {
+            throw new ArgumentException(
+                "آدرس IPv4 معتبر نیست.",
+                nameof(ip));
+        }
 
         if (port is < 1 or > 65535)
+        {
             throw new ArgumentOutOfRangeException(nameof(port));
+        }
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new ArgumentException(
+                "کد اتصال معتبر نیست.",
+                nameof(token));
+        }
 
         if (!File.Exists(filePath))
-            throw new FileNotFoundException("فایل انتخاب‌شده پیدا نشد.", filePath);
+        {
+            throw new FileNotFoundException(
+                "فایل انتخاب‌شده پیدا نشد.",
+                filePath);
+        }
 
         await using var file = new FileStream(
             filePath,
@@ -95,11 +121,17 @@ public sealed class LocalTransferService
             useAsync: true);
 
         if (file.Length > MaxFileSize)
-            throw new InvalidOperationException("حجم فایل بیشتر از حد مجاز است.");
+        {
+            throw new InvalidOperationException(
+                "حجم فایل بیشتر از حد مجاز است.");
+        }
 
         using var client = new TcpClient();
 
-        await client.ConnectAsync(ip, port, cancellationToken);
+        await client.ConnectAsync(
+            address,
+            port,
+            cancellationToken);
 
         await using NetworkStream stream = client.GetStream();
 
@@ -111,18 +143,24 @@ public sealed class LocalTransferService
         byte[] headerBytes = Encoding.UTF8.GetBytes(
             JsonSerializer.Serialize(header) + "\n");
 
-        await stream.WriteAsync(headerBytes, cancellationToken);
+        await stream.WriteAsync(
+            headerBytes,
+            cancellationToken);
 
-        await file.CopyToAsync(stream, 81920, cancellationToken);
+        await file.CopyToAsync(
+            stream,
+            81920,
+            cancellationToken);
 
         await stream.FlushAsync(cancellationToken);
     }
 
-    private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
+    private async Task ReceiveLoopAsync(
+        CancellationToken cancellationToken)
     {
         var listener = _listener;
 
-        if (listener == null)
+        if (listener is null)
             return;
 
         while (!cancellationToken.IsCancellationRequested)
@@ -131,18 +169,22 @@ public sealed class LocalTransferService
 
             try
             {
-                client = await listener.AcceptTcpClientAsync(cancellationToken);
+                client = await listener.AcceptTcpClientAsync(
+                    cancellationToken);
 
                 await using NetworkStream stream = client.GetStream();
 
-                string? line = await ReadLineAsync(stream, cancellationToken);
+                string? line = await ReadLineAsync(
+                    stream,
+                    cancellationToken);
 
                 if (string.IsNullOrWhiteSpace(line))
                     continue;
 
-                var header = JsonSerializer.Deserialize<TransferHeader>(line);
+                var header = JsonSerializer.Deserialize<TransferHeader>(
+                    line);
 
-                if (header == null ||
+                if (header is null ||
                     string.IsNullOrWhiteSpace(header.FileName) ||
                     header.Length < 0 ||
                     header.Length > MaxFileSize ||
@@ -179,15 +221,19 @@ public sealed class LocalTransferService
 
                     while (remaining > 0)
                     {
-                        int count = (int)Math.Min(buffer.Length, remaining);
+                        int count = (int)Math.Min(
+                            buffer.Length,
+                            remaining);
 
                         int read = await stream.ReadAsync(
                             buffer.AsMemory(0, count),
                             cancellationToken);
 
                         if (read == 0)
+                        {
                             throw new EndOfStreamException(
                                 "ارتباط قبل از پایان انتقال قطع شد.");
+                        }
 
                         await output.WriteAsync(
                             buffer.AsMemory(0, read),
@@ -227,8 +273,11 @@ public sealed class LocalTransferService
 
     private bool IsValidToken(string suppliedToken)
     {
-        if (string.IsNullOrWhiteSpace(_token))
+        if (string.IsNullOrWhiteSpace(_token) ||
+            string.IsNullOrWhiteSpace(suppliedToken))
+        {
             return false;
+        }
 
         try
         {
@@ -240,7 +289,7 @@ public sealed class LocalTransferService
                        expected,
                        supplied);
         }
-        catch
+        catch (FormatException)
         {
             return false;
         }
@@ -263,54 +312,107 @@ public sealed class LocalTransferService
                 return null;
 
             if (oneByte[0] == (byte)'\n')
-                return Encoding.UTF8.GetString(buffer.ToArray());
+            {
+                return Encoding.UTF8.GetString(
+                    buffer.ToArray());
+            }
 
             buffer.WriteByte(oneByte[0]);
         }
 
-        throw new InvalidDataException("سربرگ انتقال بیش از حد بزرگ است.");
+        throw new InvalidDataException(
+            "سربرگ انتقال بیش از حد بزرگ است.");
     }
 
     private static IPAddress GetLocalIPv4()
     {
-        var interfaces = NetworkInterface
+        var candidates = NetworkInterface
             .GetAllNetworkInterfaces()
-            .Where(n => n.OperationalStatus == OperationalStatus.Up)
-            .OrderBy(n => n.NetworkInterfaceType ==
-                          NetworkInterfaceType.Wireless80211 ? 0 : 1);
-
-        var addresses = interfaces
-            .SelectMany(n => n.GetIPProperties().UnicastAddresses)
-            .Select(a => a.Address)
-            .Where(a =>
-                a.AddressFamily == AddressFamily.InterNetwork &&
-                !IPAddress.IsLoopback(a) &&
-                !a.ToString().StartsWith("169.254."))
+            .Where(n =>
+                n.OperationalStatus == OperationalStatus.Up &&
+                n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+            .SelectMany(n =>
+                n.GetIPProperties().UnicastAddresses
+                    .Where(a =>
+                        a.Address.AddressFamily ==
+                        AddressFamily.InterNetwork)
+                    .Select(a => new
+                    {
+                        Interface = n,
+                        Address = a.Address
+                    }))
+            .Where(x =>
+                !IPAddress.IsLoopback(x.Address) &&
+                IsPrivateIPv4(x.Address))
             .ToList();
 
-        var result = addresses.FirstOrDefault(a =>
-            a.ToString().StartsWith("192.168.") ||
-            a.ToString().StartsWith("10.") ||
-            IsPrivate172(a));
+        // آدرس‌های رایج هات‌اسپات را فقط در صورتی انتخاب کن
+        // که واقعاً روی یکی از رابط‌های فعال دستگاه وجود داشته باشند.
+        string[] preferredAddresses =
+        {
+            "192.168.49.1",
+            "192.168.43.1"
+        };
 
-        return result ?? throw new InvalidOperationException(
-            "IP شبکه پیدا نشد. دستگاه را به Wi-Fi وصل کن.");
+        foreach (string preferred in preferredAddresses)
+        {
+            var match = candidates.FirstOrDefault(
+                x => x.Address.ToString() == preferred);
+
+            if (match is not null)
+                return match.Address;
+        }
+
+        // رابط‌های Wi-Fi را نسبت به رابط‌های دیگر اولویت بده.
+        var wireless = candidates.FirstOrDefault(
+            x => x.Interface.NetworkInterfaceType ==
+                 NetworkInterfaceType.Wireless80211);
+
+        if (wireless is not null)
+            return wireless.Address;
+
+        // آداپتورهای مجازی رایج ویندوز را در اولویت پایین‌تر قرار بده.
+        var nonVirtual = candidates.FirstOrDefault(x =>
+        {
+            string name = x.Interface.Name.ToLowerInvariant();
+            string description =
+                x.Interface.Description.ToLowerInvariant();
+
+            return !name.Contains("virtual") &&
+                   !name.Contains("vethernet") &&
+                   !name.Contains("loopback") &&
+                   !description.Contains("virtual") &&
+                   !description.Contains("loopback");
+        });
+
+        if (nonVirtual is not null)
+            return nonVirtual.Address;
+
+        return candidates.FirstOrDefault()?.Address
+            ?? throw new InvalidOperationException(
+                "IP خصوصی شبکه پیدا نشد. اتصال Wi-Fi یا هات‌اسپات را بررسی کن.");
     }
 
-    private static bool IsPrivate172(IPAddress address)
+    private static bool IsPrivateIPv4(IPAddress address)
     {
+        if (address.AddressFamily != AddressFamily.InterNetwork)
+            return false;
+
         byte[] bytes = address.GetAddressBytes();
 
-        return bytes[0] == 172 &&
-               bytes[1] >= 16 &&
-               bytes[1] <= 31;
+        return bytes[0] == 10 ||
+               (bytes[0] == 172 &&
+                bytes[1] >= 16 &&
+                bytes[1] <= 31) ||
+               (bytes[0] == 192 &&
+                bytes[1] == 168);
     }
 
     public async Task StopAsync()
     {
         var cts = _cts;
 
-        if (cts == null)
+        if (cts is null)
             return;
 
         _cts = null;
@@ -320,7 +422,7 @@ public sealed class LocalTransferService
         _listener?.Stop();
         _listener = null;
 
-        if (_receiveTask != null)
+        if (_receiveTask is not null)
         {
             try
             {
