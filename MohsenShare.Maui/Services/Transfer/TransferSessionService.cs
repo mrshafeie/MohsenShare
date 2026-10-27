@@ -453,15 +453,42 @@ public sealed class TransferSessionService : ITransferSessionService
                 return;
             }
 
+
             if (record.State == TransferFileState.Completed)
             {
-                // The sender may retry after losing the final acknowledgement.
                 await protocol.WriteMessageAsync(
                     new TransferMessage
                     {
                         Type = TransferMessageTypes.FileAccepted,
                         FileId = fileId,
                         Offset = totalBytes
+                    },
+                    cancellationToken);
+
+                // فرستنده پس از دریافت FileAccepted با Offset نهایی،
+                // پیام FileComplete را ارسال می‌کند.
+                TransferMessage? completion =
+                    await protocol.ReadMessageAsync(cancellationToken);
+
+                if (completion is null ||
+                    completion.Type != TransferMessageTypes.FileComplete ||
+                    !string.Equals(
+                        completion.FileId,
+                        fileId,
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        "The repeated file completion message is invalid.");
+                }
+
+                await protocol.WriteMessageAsync(
+                    new TransferMessage
+                    {
+                        Type = TransferMessageTypes.FileVerified,
+                        FileId = fileId,
+                        Offset = totalBytes,
+                        Sha256 = record.ActualSha256
+                            ?? record.ExpectedSha256
                     },
                     cancellationToken);
 
@@ -571,9 +598,24 @@ public sealed class TransferSessionService : ITransferSessionService
 
                 byte[] data = new byte[length];
 
-                await protocol.ReadExactlyAsync(
-                    data.AsMemory(),
-                    cancellationToken);
+
+                try
+                {
+                    await protocol.ReadExactlyAsync(
+                        data.AsMemory(),
+                        cancellationToken);
+                }
+                catch (EndOfStreamException)
+                {
+                    await SaveInterruptedStateAsync(record);
+                    throw;
+                }
+                catch (IOException)
+                {
+                    await SaveInterruptedStateAsync(record);
+                    throw;
+                }
+
 
                 await _partialStore.WriteChunkAsync(
                     fileId,
@@ -761,6 +803,7 @@ public sealed class TransferSessionService : ITransferSessionService
             cancellationToken);
     }
 
+
     public async Task QueueFilesAsync(
         IEnumerable<string> filePaths,
         CancellationToken cancellationToken = default)
@@ -773,16 +816,16 @@ public sealed class TransferSessionService : ITransferSessionService
                 "This session is operating as a receiver.");
         }
 
-        if (filePaths is null)
-        {
-            throw new ArgumentNullException(nameof(filePaths));
-        }
+        ArgumentNullException.ThrowIfNull(filePaths);
 
         await _operationLock.WaitAsync(cancellationToken);
 
         try
         {
             EnsureConnected();
+
+            // مرحله اول: آماده‌سازی همه فایل‌ها قبل از شروع انتقال
+            var records = new List<TransferResumeRecord>();
 
             foreach (string path in filePaths.Distinct(
                 StringComparer.OrdinalIgnoreCase))
@@ -810,8 +853,22 @@ public sealed class TransferSessionService : ITransferSessionService
                     State = TransferFileState.Queued
                 };
 
+                records.Add(record);
+            }
+
+            // مرحله دوم: ثبت همه فایل‌ها در صف پایدار
+            foreach (TransferResumeRecord record in records)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 await _resumeStore.UpsertAsync(record);
                 _queue.TryAdd(record);
+            }
+
+            // مرحله سوم: انتقال ترتیبی
+            foreach (TransferResumeRecord record in records)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
 
                 try
                 {
@@ -838,11 +895,13 @@ public sealed class TransferSessionService : ITransferSessionService
                     ErrorOccurred?.Invoke(
                         this,
                         new TransferErrorEventArgs(
-                            "The file transfer was interrupted.",
+                            "The file transfer was interrupted. " +
+                            "Remaining files are still queued.",
                             record.FileId,
                             ex));
 
-                    // Stop this batch. The remaining files stay queued.
+                    // انتقال فایل‌های بعدی تا رفع مشکل متوقف می‌شود؛
+                    // اما اطلاعات آن‌ها در صف باقی می‌ماند.
                     break;
                 }
             }
@@ -852,6 +911,7 @@ public sealed class TransferSessionService : ITransferSessionService
             _operationLock.Release();
         }
     }
+
 
     private async Task SendExistingRecordAsync(
         TransferResumeRecord record,
@@ -1137,32 +1197,39 @@ public sealed class TransferSessionService : ITransferSessionService
         return records;
     }
 
+
     public async Task DisconnectAsync(
         CancellationToken cancellationToken = default)
     {
         if (_disposed)
-        {
             return;
-        }
+
+        // وضعیت را پیش از تغییر ذخیره می‌کنیم.
+        bool wasConnected = State == TransferSessionState.Connected;
+        TransferProtocolStream? protocol = _protocol;
+        string? sessionId = _currentConnection?.SessionId;
 
         SetState(TransferSessionState.Closing, "Closing the session.");
 
-        if (_protocol is not null &&
-            State == TransferSessionState.Connected)
+        if (wasConnected && protocol is not null)
         {
             try
             {
-                await _protocol.WriteMessageAsync(
+                await protocol.WriteMessageAsync(
                     new TransferMessage
                     {
                         Type = TransferMessageTypes.EndSession,
-                        SessionId = _currentConnection?.SessionId
+                        SessionId = sessionId
                     },
                     cancellationToken);
             }
-            catch
+            catch (Exception ex) when (
+                ex is IOException ||
+                ex is SocketException ||
+                ex is ObjectDisposedException ||
+                ex is OperationCanceledException)
             {
-                // The connection may already be unavailable.
+                // اتصال ممکن است قبلاً قطع شده باشد.
             }
         }
 
@@ -1179,9 +1246,13 @@ public sealed class TransferSessionService : ITransferSessionService
             {
                 await _acceptTask;
             }
-            catch
+            catch (OperationCanceledException)
             {
-                // Shutdown cleanup.
+                // خاموش‌شدن عادی نشست
+            }
+            catch (ObjectDisposedException)
+            {
+                // Listener قبلاً بسته شده است
             }
         }
 
@@ -1192,16 +1263,24 @@ public sealed class TransferSessionService : ITransferSessionService
         _lifetime = null;
 
         _isReceiver = false;
+        _currentConnection = null;
 
         SetState(TransferSessionState.Disconnected, "Disconnected.");
     }
+
 
     private async Task SaveSenderStateAsync(
         TransferResumeRecord record,
         TransferFileState state,
         string? error)
     {
-        TransferResumeRecord updated = record with
+        // رکورد ذخیره‌شده ممکن است پیشرفت بیشتری از رکورد ورودی داشته باشد.
+        TransferResumeRecord? latest =
+            await _resumeStore.GetByFileIdAsync(record.FileId);
+
+        TransferResumeRecord current = latest ?? record;
+
+        TransferResumeRecord updated = current with
         {
             State = state,
             LastError = error,
@@ -1211,6 +1290,7 @@ public sealed class TransferSessionService : ITransferSessionService
         await _resumeStore.UpsertAsync(updated);
         _queue.TryUpdate(updated);
     }
+
 
     private async Task SaveInterruptedStateAsync(
         TransferResumeRecord record)
