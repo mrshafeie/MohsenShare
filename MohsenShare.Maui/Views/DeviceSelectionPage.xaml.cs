@@ -2,7 +2,10 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+
+using MohsenShare.Maui.Models;
 using MohsenShare.Maui.Services.Discovery;
 using MohsenShare.Maui.Services.Transfer;
 
@@ -11,58 +14,107 @@ namespace MohsenShare.Maui.Views;
 public partial class DeviceSelectionPage : ContentPage
 {
     private readonly IDeviceDiscoveryService _discovery;
-    private readonly ITransferSessionService _transferSession;
-    private readonly DeviceSelectionViewModel _viewModel = new();
+    private readonly ITransferSessionService _transfer;
 
-    private bool _isSending;
+    private readonly ObservableCollection<Models.DeviceInfo> _devices = new();
+    private readonly ObservableCollection<TransferResumeRecord> _transfers = new();
+
+    private CancellationTokenSource? _queueCancellation;
+    private string? _activeFileId;
+    private TransferResumeRecord? _selectedTransfer;
+
+    private bool _isBusy;
     private bool _isSubscribed;
+    private bool _isClosing;
+
+    private readonly string _outboxDirectory =
+        Path.Combine(FileSystem.AppDataDirectory, "TransferOutbox");
 
     public DeviceSelectionPage(
         IDeviceDiscoveryService discovery,
-        ITransferSessionService transferSession)
+        ITransferSessionService transfer)
     {
         InitializeComponent();
 
         _discovery = discovery;
-        _transferSession = transferSession;
+        _transfer = transfer;
 
-        BindingContext = _viewModel;
+        DevicesCollection.ItemsSource = _devices;
+        TransfersCollection.ItemsSource = _transfers;
+
+        Directory.CreateDirectory(_outboxDirectory);
+
+        SubscribeEvents();
+    }
+
+    private void SubscribeEvents()
+    {
+        if (_isSubscribed)
+            return;
+
+        _discovery.DeviceDiscovered += OnDeviceDiscovered;
+        _transfer.ProgressChanged += OnProgressChanged;
+        _transfer.SessionStateChanged += OnSessionStateChanged;
+        _transfer.ErrorOccurred += OnTransferError;
+
+        _isSubscribed = true;
+    }
+
+    private void UnsubscribeEvents()
+    {
+        if (!_isSubscribed)
+            return;
+
+        _discovery.DeviceDiscovered -= OnDeviceDiscovered;
+        _transfer.ProgressChanged -= OnProgressChanged;
+        _transfer.SessionStateChanged -= OnSessionStateChanged;
+        _transfer.ErrorOccurred -= OnTransferError;
+
+        _isSubscribed = false;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
 
-        if (!_isSubscribed)
-        {
-            _discovery.DeviceDiscovered += OnDeviceDiscovered;
-            _isSubscribed = true;
-        }
+        _isClosing = false;
+        SubscribeEvents();
 
+        await RefreshDevicesAsync();
+        await RefreshTransfersAsync();
+    }
+
+    private async Task RefreshDevicesAsync()
+    {
         try
         {
-            _viewModel.Devices.Clear();
-
-            foreach (var device in _discovery.GetDevices())
-                _viewModel.AddOrUpdate(device);
-
-            _viewModel.IsScanning = true;
-            _viewModel.Status = "در حال جستجوی دستگاه‌های نزدیک...";
-
             await _discovery.StartAsync();
 
-            foreach (var device in _discovery.GetDevices())
-                _viewModel.AddOrUpdate(device);
+            var devices = _discovery.GetDevices();
 
-            _viewModel.Status = _viewModel.Devices.Count == 0
-                ? "در انتظار پیدا شدن دستگاه..."
-                : $"{_viewModel.Devices.Count} دستگاه پیدا شد";
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                _devices.Clear();
+
+                foreach (var device in devices)
+                    _devices.Add(device);
+
+                StatusLabel.Text = _devices.Count == 0
+                    ? "دستگاهی پیدا نشد؛ اطلاعات اتصال را دستی وارد کن."
+                    : $"{_devices.Count} دستگاه پیدا شد.";
+            });
         }
         catch (Exception ex)
         {
-            _viewModel.IsScanning = false;
-            _viewModel.Status = $"خطا در جست‌وجو: {ex.Message}";
+            await SetStatusAsync($"خطا در جست‌وجو: {ex.Message}");
         }
+    }
+
+    private async void OnRefreshDevicesClicked(
+        object sender,
+        EventArgs e)
+    {
+        await RefreshDevicesAsync();
     }
 
     private void OnDeviceDiscovered(
@@ -71,311 +123,492 @@ public partial class DeviceSelectionPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            _viewModel.AddOrUpdate(device);
-            _viewModel.Status =
-                $"{_viewModel.Devices.Count} دستگاه پیدا شد";
+            var existing = _devices.FirstOrDefault(
+                x => x.Id == device.Id);
+
+            if (existing is null)
+            {
+                _devices.Add(device);
+            }
+            else
+            {
+                var index = _devices.IndexOf(existing);
+                _devices[index] = device;
+            }
         });
-    }
-
-    private async void OnManualSendClicked(
-        object sender,
-        EventArgs e)
-    {
-        if (_isSending)
-            return;
-
-        string ip = ManualIpEntry.Text?.Trim() ?? string.Empty;
-        string portText = ManualPortEntry.Text?.Trim() ?? string.Empty;
-        string token = ManualTokenEntry.Text?.Trim() ?? string.Empty;
-
-        if (!IPAddress.TryParse(ip, out IPAddress? address) ||
-            address.AddressFamily !=
-                System.Net.Sockets.AddressFamily.InterNetwork)
-        {
-            await DisplayAlertAsync(
-                "آدرس نامعتبر",
-                "یک آدرس IPv4 معتبر وارد کن.",
-                "باشه");
-            return;
-        }
-
-        if (!int.TryParse(portText, out int port) ||
-            port is < 1 or > 65535)
-        {
-            await DisplayAlertAsync(
-                "پورت نامعتبر",
-                "پورت TCP نمایش‌داده‌شده در صفحه دریافت را وارد کن.",
-                "باشه");
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            await DisplayAlertAsync(
-                "کد اتصال لازم است",
-                "کد اتصال صفحه دریافت را وارد کن.",
-                "باشه");
-            return;
-        }
-
-        await SendFileToDeviceAsync(
-            ip,
-            port,
-            token,
-            "دستگاه مقصد");
     }
 
     private void OnDeviceSelected(
         object sender,
         SelectionChangedEventArgs e)
     {
-        var device = e.CurrentSelection.FirstOrDefault()
-            as Models.DeviceInfo;
+        if (e.CurrentSelection.FirstOrDefault() is not Models.DeviceInfo device)
+            return;
 
-        if (sender is CollectionView collectionView)
-            collectionView.SelectedItem = null;
+        ManualIpEntry.Text = device.IpAddress;
+        ManualPortEntry.Text = device.Port.ToString();
 
-        if (device is null ||
-            string.IsNullOrWhiteSpace(device.IpAddress))
+        // کشف دستگاه به‌تنهایی توکن احراز هویت را فراهم نمی‌کند.
+        // توکن باید از صفحه دریافت دستگاه مقصد گرفته شود.
+        StatusLabel.Text =
+            $"دستگاه {device.Name} انتخاب شد؛ کد اتصال معتبر را وارد کن.";
+
+        DevicesCollection.SelectedItem = null;
+    }
+
+    private async void OnConnectAndSendClicked(
+        object sender,
+        EventArgs e)
+    {
+        if (_isBusy)
+            return;
+
+        if (!IPAddress.TryParse(
+                ManualIpEntry.Text?.Trim(),
+                out var address) ||
+            address.AddressFamily != AddressFamily.InterNetwork ||
+            IPAddress.IsLoopback(address))
         {
+            await DisplayAlertAsync(
+                "IP نامعتبر",
+                "یک آدرس IPv4 معتبر برای دستگاه مقصد وارد کن.",
+                "باشه");
             return;
         }
 
-        // پورت کشف UDP، پورت انتقال TCP نیست.
-        // بنابراین فقط IP را وارد می‌کنیم.
-        ManualIpEntry.Text = device.IpAddress;
+        if (!int.TryParse(ManualPortEntry.Text?.Trim(), out int port) ||
+            port is < 1 or > 65535)
+        {
+            await DisplayAlertAsync(
+                "پورت نامعتبر",
+                "پورت اتصال باید عددی بین 1 و 65535 باشد.",
+                "باشه");
+            return;
+        }
 
-        _viewModel.Status =
-            $"IP دستگاه «{device.Name}» وارد شد؛ " +
-            "پورت TCP و کد اتصال را از صفحه دریافت بردار.";
-    }
+        string token = ManualTokenEntry.Text?.Trim() ?? string.Empty;
 
-    private async Task SendFileToDeviceAsync(
-        string ip,
-        int port,
-        string token,
-        string deviceName)
-    {
-        if (_isSending)
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            await DisplayAlertAsync(
+                "کد اتصال لازم است",
+                "کد اتصال را از صفحه دریافت دستگاه مقصد وارد کن.",
+                "باشه");
+            return;
+        }
+
+        var files = await FilePicker.Default.PickMultipleAsync(
+            new PickOptions
+            {
+                PickerTitle = "فایل‌های موردنظر برای ارسال را انتخاب کن"
+            });
+
+        if (files is null)
             return;
 
-        _isSending = true;
-        _viewModel.IsScanning = false;
-        ManualSendButton.IsEnabled = false;
+        var selectedFiles = files.ToList();
 
-        string? tempPath = null;
-        bool connected = false;
+        if (selectedFiles.Count == 0)
+            return;
 
-        _transferSession.ProgressChanged += OnTransferProgressChanged;
+        SetBusy(true);
+        _queueCancellation?.Dispose();
+        _queueCancellation = new CancellationTokenSource();
+
+        var stagedPaths = new List<string>();
 
         try
         {
-            _viewModel.Status = "در انتظار انتخاب فایل...";
+            await SetStatusAsync("در حال آماده‌سازی فایل‌ها...");
 
-            var file = await FilePicker.Default.PickAsync();
-
-            if (file is null)
+            foreach (var file in selectedFiles)
             {
-                _viewModel.Status = "ارسال لغو شد.";
-                return;
+                _queueCancellation.Token.ThrowIfCancellationRequested();
+
+                string safeName = Path.GetFileName(file.FileName);
+
+                if (string.IsNullOrWhiteSpace(safeName))
+                    safeName = "file";
+
+                string stagedPath = Path.Combine(
+                    _outboxDirectory,
+                    $"{Guid.NewGuid():N}_{safeName}");
+
+                await using (var source = await file.OpenReadAsync())
+                await using (var destination = new FileStream(
+                    stagedPath,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    81920,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan))
+                {
+                    await source.CopyToAsync(
+                        destination,
+                        _queueCancellation.Token);
+                }
+
+                stagedPaths.Add(stagedPath);
             }
 
-            string fileName = Path.GetFileName(file.FileName);
+            await SetStatusAsync("در حال برقراری اتصال امن...");
 
-            if (string.IsNullOrWhiteSpace(fileName))
-                fileName = "file";
-
-            tempPath = Path.Combine(
-                FileSystem.CacheDirectory,
-                $"{Guid.NewGuid():N}_{fileName}");
-
-            _viewModel.Status = $"در حال آماده‌سازی «{fileName}»...";
-
-            await using (Stream source = await file.OpenReadAsync())
-            await using (var destination = new FileStream(
-                tempPath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                81920,
-                useAsync: true))
-            {
-                await source.CopyToAsync(destination);
-            }
-
-            _viewModel.Status = $"در حال اتصال به {deviceName} ({ip}:{port})...";
-
-            await _transferSession.ConnectAsync(
-                ip,
+            await _transfer.ConnectAsync(
+                address.ToString(),
                 port,
                 token,
-                localDeviceName: DeviceInfo.Current.Name);
+                Environment.MachineName,
+                _queueCancellation.Token);
 
-            connected = true;
+            await SetStatusAsync(
+                $"متصل شدیم؛ ارسال {stagedPaths.Count} فایل شروع شد.");
 
-            _viewModel.Status = $"در حال ارسال «{fileName}»...";
+            StopQueueButton.IsEnabled = true;
 
-            // این فراخوانی پس از پایان پردازش صف انتقال برمی‌گردد.
-            await _transferSession.QueueFilesAsync(new[] { tempPath });
+            await _transfer.QueueFilesAsync(
+                stagedPaths,
+                _queueCancellation.Token);
 
-            await _transferSession.DisconnectAsync();
-            connected = false;
+            await SetStatusAsync("صف ارسال به پایان رسید.");
 
-            _viewModel.Status = "ارسال فایل با موفقیت انجام شد.";
+            await RefreshTransfersAsync();
+            await CleanupCompletedStagedFilesAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            await SetStatusAsync(
+                "صف متوقف شد. فایل‌های ناتمام برای ادامه بعدی نگه داشته شده‌اند.");
 
-            await DisplayAlertAsync(
-                "ارسال موفق",
-                $"فایل «{fileName}» ارسال و تأیید شد.",
-                "باشه");
-
-            await Navigation.PopModalAsync();
+            await RefreshTransfersAsync();
         }
         catch (Exception ex)
         {
-            _viewModel.Status = "ارسال انجام نشد.";
+            await SetStatusAsync($"خطا: {ex.Message}");
 
             await DisplayAlertAsync(
-                "خطا در ارسال",
-                $"ارسال به {deviceName} انجام نشد.\n\n{ex.Message}",
+                "انتقال انجام نشد",
+                $"{ex.Message}\n\nسوابق انتقال بررسی می‌شوند تا امکان ادامه فراهم بماند.",
                 "باشه");
+
+            await RefreshTransfersAsync();
         }
         finally
         {
-            _transferSession.ProgressChanged -= OnTransferProgressChanged;
+            StopQueueButton.IsEnabled = false;
+            _queueCancellation?.Dispose();
+            _queueCancellation = null;
 
-            if (connected)
-            {
-                try
-                {
-                    await _transferSession.DisconnectAsync();
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine(
-                        $"قطع نشست انتقال: {ex.Message}");
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(tempPath) &&
-                File.Exists(tempPath))
-            {
-                try
-                {
-                    File.Delete(tempPath);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine(
-                        $"حذف فایل موقت ناموفق بود: {ex.Message}");
-                }
-            }
-
-            _isSending = false;
-            ManualSendButton.IsEnabled = true;
-
-            if (Navigation.ModalStack.Contains(this))
-                _viewModel.IsScanning = true;
+            SetBusy(false);
         }
     }
 
-    private void OnTransferProgressChanged(
+    private async void OnStopQueueClicked(
+        object sender,
+        EventArgs e)
+    {
+        if (_queueCancellation is null || _queueCancellation.IsCancellationRequested)
+            return;
+
+        bool confirm = await DisplayAlertAsync(
+            "توقف صف",
+            "صف ارسال متوقف می‌شود. امکان ادامه انتقال‌های ناتمام به وضعیت و اتصال ذخیره‌شده بستگی دارد. ادامه می‌دهی؟",
+            "توقف",
+            "انصراف");
+
+        if (!confirm)
+            return;
+
+        _queueCancellation.Cancel();
+        StopQueueButton.IsEnabled = false;
+
+        await SetStatusAsync("درخواست توقف صف ارسال شد...");
+    }
+
+    private void OnProgressChanged(
         object? sender,
         TransferProgressChangedEventArgs e)
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            double speedMb = e.BytesPerSecond / (1024d * 1024d);
+            _activeFileId = e.Transfer.FileId;
 
-            _viewModel.Status =
-                $"انتقال {e.Transfer.FileName}: " +
-                $"{e.ProgressPercentage:F1}% — {speedMb:F2} MB/s";
+            double percentage = Math.Clamp(
+                e.ProgressPercentage / 100d,
+                0d,
+                1d);
+
+            TransferProgressBar.Progress = percentage;
+            ProgressLabel.Text = $"{e.ProgressPercentage:F1}%";
+
+            SpeedLabel.Text = FormatBytesPerSecond(e.BytesPerSecond);
+
+            EtaLabel.Text = e.EstimatedRemaining.HasValue
+                ? $"زمان باقی‌مانده: {e.EstimatedRemaining.Value:hh\\:mm\\:ss}"
+                : "زمان باقی‌مانده: در حال محاسبه";
+
+            StatusLabel.Text =
+                $"{e.Transfer.FileName} — {e.Transfer.State}";
         });
+    }
+
+    private void OnSessionStateChanged(
+        object? sender,
+        TransferSessionStateChangedEventArgs e)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.Message))
+                StatusLabel.Text = e.Message;
+        });
+    }
+
+    private void OnTransferError(
+        object? sender,
+        TransferErrorEventArgs e)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            StatusLabel.Text = $"خطای انتقال: {e.Message}";
+        });
+    }
+
+    private async Task RefreshTransfersAsync()
+    {
+        try
+        {
+            var records = await _transfer.GetTransfersAsync();
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                _transfers.Clear();
+
+                foreach (var record in records
+                    .OrderByDescending(x => x.UpdatedAtUtc))
+                {
+                    _transfers.Add(record);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            await SetStatusAsync(
+                $"بازیابی سوابق انتقال ناموفق بود: {ex.Message}");
+        }
+    }
+
+    private async void OnRefreshTransfersClicked(
+        object sender,
+        EventArgs e)
+    {
+        await RefreshTransfersAsync();
+    }
+
+    private void OnTransferSelected(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        _selectedTransfer =
+            e.CurrentSelection.FirstOrDefault() as TransferResumeRecord;
+
+        ResumeButton.IsEnabled =
+            _selectedTransfer is not null &&
+            _selectedTransfer.Direction == TransferDirection.Sending &&
+            _selectedTransfer.State is not TransferFileState.Completed
+                and not TransferFileState.Cancelled;
+    }
+
+    private async void OnResumeClicked(
+        object sender,
+        EventArgs e)
+    {
+        if (_isBusy || _selectedTransfer is null)
+            return;
+
+        var record = _selectedTransfer;
+
+        if (string.IsNullOrWhiteSpace(record.SourcePath) ||
+            !File.Exists(record.SourcePath))
+        {
+            await DisplayAlertAsync(
+                "فایل منبع پیدا نشد",
+                "فایل اصلی برای ادامه انتقال موجود نیست. مسیر فایل را بررسی کن.",
+                "باشه");
+            return;
+        }
+
+        SetBusy(true);
+
+        try
+        {
+            await SetStatusAsync($"در حال ادامه انتقال {record.FileName}...");
+
+            await _transfer.ResumeAsync(record.FileId);
+
+            await SetStatusAsync("درخواست ادامه انتقال به پایان رسید.");
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync(
+                "ادامه انتقال ناموفق بود",
+                ex.Message,
+                "باشه");
+
+            await SetStatusAsync($"ادامه انتقال انجام نشد: {ex.Message}");
+        }
+        finally
+        {
+            SetBusy(false);
+            await RefreshTransfersAsync();
+        }
+    }
+
+    private async Task CleanupCompletedStagedFilesAsync()
+    {
+        var records = await _transfer.GetTransfersAsync();
+
+        foreach (var record in records)
+        {
+            if (record.State != TransferFileState.Completed ||
+                string.IsNullOrWhiteSpace(record.SourcePath))
+            {
+                continue;
+            }
+
+            string fullPath;
+
+            try
+            {
+                fullPath = Path.GetFullPath(record.SourcePath);
+            }
+            catch
+            {
+                continue;
+            }
+
+            // فقط فایل‌های متعلق به پوشه خروجی خود برنامه حذف شوند.
+            string root = Path.GetFullPath(_outboxDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+
+            if (!fullPath.StartsWith(
+                    root,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (File.Exists(fullPath))
+                    File.Delete(fullPath);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Cleanup failed: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task SetStatusAsync(string message)
+    {
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            StatusLabel.Text = message;
+        });
+    }
+
+    private void SetBusy(bool busy)
+    {
+        _isBusy = busy;
+
+        ConnectAndSendButton.IsEnabled = !busy;
+        RefreshDevicesButton.IsEnabled = !busy;
+        ResumeButton.IsEnabled = !busy && _selectedTransfer is not null &&
+            _selectedTransfer.Direction == TransferDirection.Sending &&
+            _selectedTransfer.State is not TransferFileState.Completed
+                and not TransferFileState.Cancelled;
+    }
+
+    private static string FormatBytesPerSecond(long bytesPerSecond)
+    {
+        string[] units = ["B/s", "KB/s", "MB/s", "GB/s"];
+        double speed = Math.Max(0, bytesPerSecond);
+        int unit = 0;
+
+        while (speed >= 1024 && unit < units.Length - 1)
+        {
+            speed /= 1024;
+            unit++;
+        }
+
+        return $"{speed:F1} {units[unit]}";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double size = Math.Max(0, bytes);
+        int unit = 0;
+
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+
+        return $"{size:F1} {units[unit]}";
     }
 
     private async void OnCancelClicked(
         object sender,
         EventArgs e)
     {
-        if (_isSending)
+        if (_isBusy)
         {
-            await DisplayAlertAsync(
-                "انتقال در حال انجام",
-                "ابتدا اجازه بده عملیات ارسال تمام شود.",
-                "باشه");
-            return;
+            bool confirm = await DisplayAlertAsync(
+                "انتقال در حال اجراست",
+                "اگر صفحه را ببندی، ممکن است اتصال قطع شود. ابتدا صف را متوقف کن.",
+                "بستن صفحه",
+                "بازگشت");
+
+            if (!confirm)
+                return;
+
+            _queueCancellation?.Cancel();
         }
 
-        await Navigation.PopModalAsync();
+        _isClosing = true;
+        UnsubscribeEvents();
+
+        try
+        {
+            await _discovery.StopAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex.Message);
+        }
+
+        if (Navigation.ModalStack.Contains(this))
+            await Navigation.PopModalAsync();
+        else if (Navigation.NavigationStack.LastOrDefault() == this)
+            await Navigation.PopAsync();
     }
 
-    protected override void OnDisappearing()
+    protected override async void OnDisappearing()
     {
-        if (_isSubscribed)
-        {
-            _discovery.DeviceDiscovered -= OnDeviceDiscovered;
-            _isSubscribed = false;
-        }
+        UnsubscribeEvents();
 
-        _viewModel.IsScanning = false;
+        try
+        {
+            await _discovery.StopAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex.Message);
+        }
 
         base.OnDisappearing();
-    }
-
-    private sealed class DeviceSelectionViewModel : INotifyPropertyChanged
-    {
-        private bool _isScanning;
-        private string _status = "آماده جست‌وجو";
-
-        public ObservableCollection<Models.DeviceInfo> Devices { get; } = new();
-
-        public bool IsScanning
-        {
-            get => _isScanning;
-            set
-            {
-                if (_isScanning == value)
-                    return;
-
-                _isScanning = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public string Status
-        {
-            get => _status;
-            set
-            {
-                if (_status == value)
-                    return;
-
-                _status = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public void AddOrUpdate(Models.DeviceInfo device)
-        {
-            var existing = Devices.FirstOrDefault(x => x.Id == device.Id);
-
-            if (existing is null)
-            {
-                Devices.Add(device);
-                return;
-            }
-
-            int index = Devices.IndexOf(existing);
-            Devices[index] = device;
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        private void OnPropertyChanged(
-            [CallerMemberName] string? propertyName = null)
-        {
-            PropertyChanged?.Invoke(
-                this,
-                new PropertyChangedEventArgs(propertyName));
-        }
     }
 }

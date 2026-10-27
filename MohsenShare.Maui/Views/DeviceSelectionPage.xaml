@@ -4,197 +4,269 @@
     x:Class="MohsenShare.Maui.Views.DeviceSelectionPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    Title="انتخاب دستگاه"
+    Title="ارسال فایل"
     BackgroundColor="#F4F7FB">
 
-    <Grid Padding="20"
-          RowDefinitions="Auto,Auto,Auto,*,Auto"
-          RowSpacing="12">
+    <Grid Padding="18" RowDefinitions="*,Auto" RowSpacing="12">
 
-        <VerticalStackLayout Grid.Row="0" Spacing="5">
-            <Label Text="ارسال فایل"
-                   FontSize="28"
-                   FontAttributes="Bold"
-                   TextColor="#172554" />
+        <ScrollView Grid.Row="0">
+            <VerticalStackLayout Spacing="14">
 
-            <Label Text="اطلاعات اتصال را از صفحه دریافت دستگاه مقصد بردار."
-                   FontSize="14"
-                   TextColor="#64748B" />
-        </VerticalStackLayout>
+                <Label
+                    Text="MohsenShare"
+                    FontSize="28"
+                    FontAttributes="Bold"
+                    TextColor="#172554" />
 
-        <Border Grid.Row="1"
-                Padding="12"
-                BackgroundColor="White"
-                Stroke="#DBEAFE"
-                StrokeShape="RoundRectangle 14">
+                <Label
+                    Text="انتقال فایل بین دستگاه‌ها در شبکه محلی"
+                    FontSize="14"
+                    TextColor="#64748B" />
 
-            <HorizontalStackLayout Spacing="10">
-                <ActivityIndicator IsRunning="{Binding IsScanning}"
-                                   IsVisible="{Binding IsScanning}"
-                                   Color="#2563EB"
-                                   VerticalOptions="Center" />
+                <Border
+                    Padding="14"
+                    BackgroundColor="White"
+                    Stroke="#DBEAFE"
+                    StrokeShape="RoundRectangle 16">
 
-                <Label Text="{Binding Status}"
-                       FontSize="13"
-                       TextColor="#475569"
-                       VerticalOptions="Center" />
-            </HorizontalStackLayout>
-        </Border>
+                    <VerticalStackLayout Spacing="10">
 
-        <Border Grid.Row="2"
-                Padding="15"
-                BackgroundColor="White"
-                Stroke="#DCE5F0"
-                StrokeShape="RoundRectangle 18">
+                        <Label
+                            Text="اتصال مقصد"
+                            FontSize="18"
+                            FontAttributes="Bold"
+                            TextColor="#172554" />
 
-            <VerticalStackLayout Spacing="10">
+                        <Entry
+                            x:Name="ManualIpEntry"
+                            Placeholder="IP مقصد، مثال 192.168.1.20"
+                            Keyboard="Text"
+                            FlowDirection="LeftToRight"
+                            ClearButtonVisibility="WhileEditing" />
 
-                <Label Text="اتصال مستقیم"
-                       FontSize="18"
-                       FontAttributes="Bold"
-                       TextColor="#172554" />
+                        <Entry
+                            x:Name="ManualPortEntry"
+                            Placeholder="پورت مقصد"
+                            Keyboard="Numeric"
+                            FlowDirection="LeftToRight"
+                            ClearButtonVisibility="WhileEditing" />
 
-                <Entry x:Name="ManualIpEntry"
-                       Placeholder="آدرس IP، مثال: 192.168.137.1"
-                       Keyboard="Text"
-                       ClearButtonVisibility="WhileEditing"
-                       FlowDirection="LeftToRight"
-                       HorizontalTextAlignment="Start"
-                       BackgroundColor="#F8FAFC"
-                       TextColor="#0F172A"
-                       PlaceholderColor="#94A3B8"
-                       HeightRequest="46" />
+                        <Entry
+                            x:Name="ManualTokenEntry"
+                            Placeholder="کد اتصال مقصد"
+                            IsSpellCheckEnabled="False"
+                            IsTextPredictionEnabled="False"
+                            FlowDirection="LeftToRight"
+                            ClearButtonVisibility="WhileEditing" />
 
-                <Entry x:Name="ManualPortEntry"
-                       Placeholder="پورت TCP نمایش‌داده‌شده در صفحه دریافت"
-                       Keyboard="Numeric"
-                       ClearButtonVisibility="WhileEditing"
-                       FlowDirection="LeftToRight"
-                       HorizontalTextAlignment="Start"
-                       BackgroundColor="#F8FAFC"
-                       TextColor="#0F172A"
-                       PlaceholderColor="#94A3B8"
-                       HeightRequest="46" />
+                        <Button
+                            x:Name="RefreshDevicesButton"
+                            Text="جست‌وجوی دستگاه‌ها"
+                            Clicked="OnRefreshDevicesClicked"
+                            BackgroundColor="#E2E8F0"
+                            TextColor="#172554" />
 
-                <Entry x:Name="ManualTokenEntry"
-                       Placeholder="کد اتصال نمایش‌داده‌شده در صفحه دریافت"
-                       Keyboard="Text"
-                       IsSpellCheckEnabled="False"
-                       IsTextPredictionEnabled="False"
-                       ClearButtonVisibility="WhileEditing"
-                       FlowDirection="LeftToRight"
-                       HorizontalTextAlignment="Start"
-                       BackgroundColor="#F8FAFC"
-                       TextColor="#0F172A"
-                       PlaceholderColor="#94A3B8"
-                       HeightRequest="46" />
+                        <CollectionView
+                            x:Name="DevicesCollection"
+                            HeightRequest="150"
+                            SelectionMode="Single"
+                            SelectionChanged="OnDeviceSelected">
 
-                <Button x:Name="ManualSendButton"
-                        Text="انتخاب فایل و ارسال"
-                        Clicked="OnManualSendClicked"
-                        HeightRequest="50"
-                        CornerRadius="13"
-                        BackgroundColor="#2563EB"
-                        TextColor="White"
-                        FontSize="15"
-                        FontAttributes="Bold" />
+                            <CollectionView.EmptyView>
+                                <Label
+                                    Text="دستگاه کشف‌شده‌ای وجود ندارد؛ اطلاعات اتصال را دستی وارد کن."
+                                    Padding="8"
+                                    TextColor="#64748B" />
+                            </CollectionView.EmptyView>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Margin="0,3"
+                                        Padding="10"
+                                        BackgroundColor="#F8FAFC"
+                                        Stroke="#E2E8F0"
+                                        StrokeShape="RoundRectangle 10">
+
+                                        <Grid
+                                            ColumnDefinitions="*,Auto"
+                                            ColumnSpacing="8">
+
+                                            <VerticalStackLayout Spacing="3">
+                                                <Label
+                                                    Text="{Binding Name}"
+                                                    FontAttributes="Bold"
+                                                    TextColor="#172554" />
+
+                                                <Label
+                                                    Text="{Binding IpAddress}"
+                                                    FontSize="12"
+                                                    TextColor="#2563EB" />
+                                            </VerticalStackLayout>
+
+                                            <Label
+                                                Grid.Column="1"
+                                                Text="{Binding Port}"
+                                                VerticalOptions="Center"
+                                                TextColor="#475569" />
+
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+
+                        <Button
+                            x:Name="ConnectAndSendButton"
+                            Text="اتصال، انتخاب چند فایل و ارسال"
+                            Clicked="OnConnectAndSendClicked"
+                            BackgroundColor="#2563EB"
+                            TextColor="White"
+                            FontAttributes="Bold"
+                            HeightRequest="50" />
+
+                    </VerticalStackLayout>
+                </Border>
+
+                <Border
+                    Padding="14"
+                    BackgroundColor="White"
+                    Stroke="#E2E8F0"
+                    StrokeShape="RoundRectangle 16">
+
+                    <VerticalStackLayout Spacing="9">
+
+                        <Label
+                            Text="وضعیت انتقال"
+                            FontSize="18"
+                            FontAttributes="Bold"
+                            TextColor="#172554" />
+
+                        <Label
+                            x:Name="StatusLabel"
+                            Text="آماده اتصال"
+                            TextColor="#475569" />
+
+                        <ProgressBar
+                            x:Name="TransferProgressBar"
+                            Progress="0"
+                            ProgressColor="#2563EB" />
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label
+                                x:Name="ProgressLabel"
+                                Text="۰٪"
+                                TextColor="#334155" />
+
+                            <Label
+                                x:Name="SpeedLabel"
+                                Grid.Column="1"
+                                Text="۰ بایت بر ثانیه"
+                                TextColor="#334155" />
+                        </Grid>
+
+                        <Label
+                            x:Name="EtaLabel"
+                            Text="زمان باقی‌مانده: نامشخص"
+                            FontSize="12"
+                            TextColor="#64748B" />
+
+                        <Button
+                            x:Name="StopQueueButton"
+                            Text="توقف صف و امکان ادامه بعداً"
+                            Clicked="OnStopQueueClicked"
+                            IsEnabled="False"
+                            BackgroundColor="#B45309"
+                            TextColor="White" />
+
+                    </VerticalStackLayout>
+                </Border>
+
+                <Border
+                    Padding="14"
+                    BackgroundColor="White"
+                    Stroke="#E2E8F0"
+                    StrokeShape="RoundRectangle 16">
+
+                    <VerticalStackLayout Spacing="9">
+
+                        <Label
+                            Text="انتقال‌های ذخیره‌شده"
+                            FontSize="18"
+                            FontAttributes="Bold"
+                            TextColor="#172554" />
+
+                        <Button
+                            Text="به‌روزرسانی سوابق"
+                            Clicked="OnRefreshTransfersClicked"
+                            BackgroundColor="#E2E8F0"
+                            TextColor="#172554" />
+
+                        <CollectionView
+                            x:Name="TransfersCollection"
+                            HeightRequest="230"
+                            SelectionMode="Single"
+                            SelectionChanged="OnTransferSelected">
+
+                            <CollectionView.EmptyView>
+                                <Label
+                                    Text="هنوز سابقه انتقالی ثبت نشده است."
+                                    Padding="8"
+                                    TextColor="#64748B" />
+                            </CollectionView.EmptyView>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Margin="0,3"
+                                        Padding="10"
+                                        BackgroundColor="#F8FAFC"
+                                        Stroke="#E2E8F0"
+                                        StrokeShape="RoundRectangle 10">
+
+                                        <VerticalStackLayout Spacing="4">
+                                            <Label
+                                                Text="{Binding FileName}"
+                                                FontAttributes="Bold"
+                                                TextColor="#172554" />
+
+                                            <Label
+                                                Text="{Binding ProgressPercentage, StringFormat='{0:F1}%'}"
+                                                FontSize="12"
+                                                TextColor="#2563EB" />
+
+                                            <Label
+                                                Text="{Binding State}"
+                                                FontSize="12"
+                                                TextColor="#64748B" />
+                                        </VerticalStackLayout>
+
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+
+                        <Button
+                            x:Name="ResumeButton"
+                            Text="ادامه انتقال انتخاب‌شده"
+                            Clicked="OnResumeClicked"
+                            IsEnabled="False"
+                            BackgroundColor="#15803D"
+                            TextColor="White" />
+
+                    </VerticalStackLayout>
+                </Border>
 
             </VerticalStackLayout>
-        </Border>
+        </ScrollView>
 
-        <CollectionView Grid.Row="3"
-                        ItemsSource="{Binding Devices}"
-                        SelectionMode="Single"
-                        SelectionChanged="OnDeviceSelected">
-
-            <CollectionView.Header>
-                <Label Text="دستگاه‌های پیدا‌شده در شبکه"
-                       Margin="0,0,0,10"
-                       FontSize="14"
-                       FontAttributes="Bold"
-                       TextColor="#334155" />
-            </CollectionView.Header>
-
-            <CollectionView.EmptyView>
-                <VerticalStackLayout Padding="12"
-                                     Spacing="8"
-                                     VerticalOptions="Center"
-                                     HorizontalOptions="Center">
-
-                    <Label Text="هنوز دستگاهی پیدا نشده است"
-                           FontSize="16"
-                           FontAttributes="Bold"
-                           TextColor="#334155"
-                           HorizontalTextAlignment="Center" />
-
-                    <Label Text="می‌توانی IP دستگاه را دستی وارد کنی."
-                           FontSize="13"
-                           TextColor="#64748B"
-                           HorizontalTextAlignment="Center" />
-                </VerticalStackLayout>
-            </CollectionView.EmptyView>
-
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
-                    <Border Margin="0,0,0,8"
-                            Padding="13"
-                            BackgroundColor="White"
-                            Stroke="#E2E8F0"
-                            StrokeShape="RoundRectangle 14">
-
-                        <Grid ColumnDefinitions="Auto,*,Auto"
-                              ColumnSpacing="12">
-
-                            <Border WidthRequest="44"
-                                    HeightRequest="44"
-                                    BackgroundColor="#EFF6FF"
-                                    StrokeThickness="0"
-                                    StrokeShape="RoundRectangle 12">
-
-                                <Label Text="💻"
-                                       FontSize="22"
-                                       HorizontalTextAlignment="Center"
-                                       VerticalTextAlignment="Center" />
-                            </Border>
-
-                            <VerticalStackLayout Grid.Column="1"
-                                                 VerticalOptions="Center"
-                                                 Spacing="3">
-
-                                <Label Text="{Binding Name}"
-                                       FontSize="15"
-                                       FontAttributes="Bold"
-                                       TextColor="#172554" />
-
-                                <Label Text="{Binding Platform}"
-                                       FontSize="12"
-                                       TextColor="#64748B" />
-
-                                <Label Text="{Binding IpAddress}"
-                                       FontSize="12"
-                                       TextColor="#2563EB" />
-                            </VerticalStackLayout>
-
-                            <Label Grid.Column="2"
-                                   Text="›"
-                                   FontSize="26"
-                                   TextColor="#2563EB"
-                                   VerticalOptions="Center" />
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
-
-        <Button Grid.Row="4"
-                Text="لغو"
-                Clicked="OnCancelClicked"
-                HeightRequest="48"
-                CornerRadius="13"
-                BackgroundColor="#475569"
-                TextColor="White"
-                FontSize="15"
-                FontAttributes="Bold" />
+        <Button
+            Grid.Row="1"
+            Text="بستن صفحه"
+            Clicked="OnCancelClicked"
+            BackgroundColor="#475569"
+            TextColor="White"
+            HeightRequest="48" />
 
     </Grid>
 </ContentPage>
