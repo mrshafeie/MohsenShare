@@ -49,7 +49,7 @@ public static class MauiProgram
         // Public destination storage
         builder.Services.AddSingleton<ReceivedFileStorageService>();
 
-        // New transfer engine
+        // Transfer session engine
         builder.Services.AddSingleton<
             ITransferSessionService,
             TransferSessionService>();
