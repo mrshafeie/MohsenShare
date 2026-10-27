@@ -1,79 +1,88 @@
+
 using MohsenShare.Maui.Services.Transfer;
 
 namespace MohsenShare.Maui.Views;
 
 public partial class QrPage : ContentPage
 {
-    private readonly LocalTransferService _transfer;
+    private readonly ITransferSessionService _transferSession;
     private bool _stopped;
 
     public QrPage(
-        LocalTransferService transfer,
-        byte[] qrPng,
-        string address,
-        string token)
+        ITransferSessionService transferSession,
+        TransferConnectionInfo connection)
     {
         InitializeComponent();
 
-        _transfer = transfer;
+        _transferSession = transferSession;
 
-        QrImage.Source = ImageSource.FromStream(
-            () => new MemoryStream(qrPng));
+        QrImage.Value = connection.CreateQrPayload();
 
-        AddressLabel.Text = address;
-        TokenLabel.Text = token;
+        AddressLabel.Text =
+            $"{connection.IpAddress}:{connection.Port}";
 
-        _transfer.FileReceived += OnFileReceived;
+        TokenLabel.Text = connection.Token;
+
+        _transferSession.FileReceived += OnFileReceived;
+        _transferSession.ErrorOccurred += OnTransferError;
     }
 
     private async void OnFileReceived(
         object? sender,
-        string path)
+        TransferFileReceivedEventArgs e)
     {
-        await MainThread.InvokeOnMainThreadAsync(
-            async () =>
-            {
-                await DisplayAlertAsync(
-                    "دریافت موفق",
-                    $"فایل دریافت شد:\n" +
-                    $"{Path.GetFileName(path)}\n\n" +
-                    $"محل ذخیره:\n{path}",
-                    "باشه");
-            });
+        await MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            await DisplayAlertAsync(
+                "دریافت موفق",
+                $"فایل: {e.FileName}\n\n" +
+                $"حجم: {e.Length:N0} بایت\n\n" +
+                $"محل ذخیره:\n{e.Location}",
+                "باشه");
+        });
+    }
+
+    private async void OnTransferError(
+        object? sender,
+        TransferErrorEventArgs e)
+    {
+        await MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            await DisplayAlertAsync(
+                "خطای انتقال",
+                e.Message,
+                "باشه");
+        });
     }
 
     private async void OnStopClicked(
         object sender,
         EventArgs e)
     {
-        await StopAndCloseAsync();
-    }
-
-    private async Task StopAndCloseAsync()
-    {
         if (_stopped)
             return;
 
         _stopped = true;
 
-        _transfer.FileReceived -= OnFileReceived;
+        _transferSession.FileReceived -= OnFileReceived;
+        _transferSession.ErrorOccurred -= OnTransferError;
 
-        await _transfer.StopAsync();
-
-        if (Navigation.ModalStack.Contains(this))
-            await Navigation.PopModalAsync();
+        try
+        {
+            await _transferSession.DisconnectAsync();
+        }
+        finally
+        {
+            if (Navigation.ModalStack.Contains(this))
+                await Navigation.PopModalAsync();
+        }
     }
 
     protected override void OnDisappearing()
     {
+        _transferSession.FileReceived -= OnFileReceived;
+        _transferSession.ErrorOccurred -= OnTransferError;
+
         base.OnDisappearing();
-
-        if (_stopped)
-            return;
-
-        // عمداً Transfer را Stop نمی‌کنیم.
-        //
-        // خروج از صفحه نباید اتصال را قطع کند.
-        // فقط دکمه «توقف» باید اتصال را متوقف کند.
     }
 }

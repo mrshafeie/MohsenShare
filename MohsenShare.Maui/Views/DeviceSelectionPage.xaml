@@ -7,240 +7,194 @@
     Title="انتخاب دستگاه"
     BackgroundColor="#F4F7FB">
 
-    <Grid
-        Padding="20"
-        RowDefinitions="Auto,Auto,Auto,*,Auto"
-        RowSpacing="14">
+    <Grid Padding="20"
+          RowDefinitions="Auto,Auto,Auto,*,Auto"
+          RowSpacing="12">
 
-        <!-- عنوان صفحه -->
-        <VerticalStackLayout
-            Grid.Row="0"
-            Spacing="5">
+        <VerticalStackLayout Grid.Row="0" Spacing="5">
+            <Label Text="ارسال فایل"
+                   FontSize="28"
+                   FontAttributes="Bold"
+                   TextColor="#172554" />
 
-            <Label
-                Text="ارسال فایل"
-                FontSize="28"
-                FontAttributes="Bold"
-                TextColor="#172554" />
-
-            <Label
-                Text="دستگاه مقصد را انتخاب کن یا اطلاعات اتصال گوشی را وارد کن."
-                FontSize="14"
-                TextColor="#64748B" />
-
+            <Label Text="اطلاعات اتصال را از صفحه دریافت دستگاه مقصد بردار."
+                   FontSize="14"
+                   TextColor="#64748B" />
         </VerticalStackLayout>
 
-        <!-- وضعیت جست‌وجوی خودکار -->
-        <Border
-            Grid.Row="1"
-            Padding="14"
-            BackgroundColor="White"
-            Stroke="#DBEAFE"
-            StrokeThickness="1"
-            StrokeShape="RoundRectangle 16">
+        <Border Grid.Row="1"
+                Padding="12"
+                BackgroundColor="White"
+                Stroke="#DBEAFE"
+                StrokeShape="RoundRectangle 14">
 
-            <HorizontalStackLayout
-                Spacing="12">
+            <HorizontalStackLayout Spacing="10">
+                <ActivityIndicator IsRunning="{Binding IsScanning}"
+                                   IsVisible="{Binding IsScanning}"
+                                   Color="#2563EB"
+                                   VerticalOptions="Center" />
 
-                <ActivityIndicator
-                    IsRunning="{Binding IsScanning}"
-                    IsVisible="{Binding IsScanning}"
-                    VerticalOptions="Center"
-                    Color="#2563EB" />
-
-                <Label
-                    Text="{Binding Status}"
-                    FontSize="13"
-                    TextColor="#475569"
-                    VerticalOptions="Center" />
-
+                <Label Text="{Binding Status}"
+                       FontSize="13"
+                       TextColor="#475569"
+                       VerticalOptions="Center" />
             </HorizontalStackLayout>
-
         </Border>
 
-        <!-- اتصال دستی -->
-        <Border
-            Grid.Row="2"
-            Padding="16"
-            BackgroundColor="White"
-            Stroke="#DCE5F0"
-            StrokeThickness="1"
-            StrokeShape="RoundRectangle 18">
+        <Border Grid.Row="2"
+                Padding="15"
+                BackgroundColor="White"
+                Stroke="#DCE5F0"
+                StrokeShape="RoundRectangle 18">
 
             <VerticalStackLayout Spacing="10">
 
-                <Label
-                    Text="اتصال مستقیم به گوشی"
-                    FontSize="18"
-                    FontAttributes="Bold"
-                    TextColor="#172554" />
+                <Label Text="اتصال مستقیم"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       TextColor="#172554" />
 
-                <Label
-                    Text="IP و کد اتصال را از صفحه دریافت فایل گوشی وارد کن."
-                    FontSize="13"
-                    TextColor="#64748B" />
+                <Entry x:Name="ManualIpEntry"
+                       Placeholder="آدرس IP، مثال: 192.168.137.1"
+                       Keyboard="Text"
+                       ClearButtonVisibility="WhileEditing"
+                       FlowDirection="LeftToRight"
+                       HorizontalTextAlignment="Start"
+                       BackgroundColor="#F8FAFC"
+                       TextColor="#0F172A"
+                       PlaceholderColor="#94A3B8"
+                       HeightRequest="46" />
 
-                <Entry
-                    x:Name="ManualIpEntry"
-                    Placeholder="آدرس IP گوشی، مثلاً 192.168.137.1"
-                    Keyboard="Numeric"
-                    ClearButtonVisibility="WhileEditing"
-                    FlowDirection="LeftToRight"
-                    HorizontalTextAlignment="Start"
-                    BackgroundColor="#F8FAFC"
-                    TextColor="#0F172A"
-                    PlaceholderColor="#94A3B8"
-                    HeightRequest="48" />
+                <Entry x:Name="ManualPortEntry"
+                       Placeholder="پورت TCP نمایش‌داده‌شده در صفحه دریافت"
+                       Keyboard="Numeric"
+                       ClearButtonVisibility="WhileEditing"
+                       FlowDirection="LeftToRight"
+                       HorizontalTextAlignment="Start"
+                       BackgroundColor="#F8FAFC"
+                       TextColor="#0F172A"
+                       PlaceholderColor="#94A3B8"
+                       HeightRequest="46" />
 
-                <Entry
-                    x:Name="ManualTokenEntry"
-                    Placeholder="کد اتصال گوشی"
-                    Keyboard="Text"
-                    IsSpellCheckEnabled="False"
-                    IsTextPredictionEnabled="False"
-                    ClearButtonVisibility="WhileEditing"
-                    FlowDirection="LeftToRight"
-                    HorizontalTextAlignment="Start"
-                    BackgroundColor="#F8FAFC"
-                    TextColor="#0F172A"
-                    PlaceholderColor="#94A3B8"
-                    HeightRequest="48" />
+                <Entry x:Name="ManualTokenEntry"
+                       Placeholder="کد اتصال نمایش‌داده‌شده در صفحه دریافت"
+                       Keyboard="Text"
+                       IsSpellCheckEnabled="False"
+                       IsTextPredictionEnabled="False"
+                       ClearButtonVisibility="WhileEditing"
+                       FlowDirection="LeftToRight"
+                       HorizontalTextAlignment="Start"
+                       BackgroundColor="#F8FAFC"
+                       TextColor="#0F172A"
+                       PlaceholderColor="#94A3B8"
+                       HeightRequest="46" />
 
-                <Button
-                    x:Name="ManualSendButton"
-                    Text="انتخاب فایل و ارسال به گوشی"
-                    Clicked="OnManualSendClicked"
-                    HeightRequest="50"
-                    CornerRadius="13"
-                    BackgroundColor="#2563EB"
-                    TextColor="White"
-                    FontSize="15"
-                    FontAttributes="Bold" />
+                <Button x:Name="ManualSendButton"
+                        Text="انتخاب فایل و ارسال"
+                        Clicked="OnManualSendClicked"
+                        HeightRequest="50"
+                        CornerRadius="13"
+                        BackgroundColor="#2563EB"
+                        TextColor="White"
+                        FontSize="15"
+                        FontAttributes="Bold" />
 
             </VerticalStackLayout>
-
         </Border>
 
-        <!-- دستگاه‌های کشف‌شده خودکار -->
-        <CollectionView
-            Grid.Row="3"
-            ItemsSource="{Binding Devices}"
-            SelectionMode="Single"
-            SelectionChanged="OnDeviceSelected">
+        <CollectionView Grid.Row="3"
+                        ItemsSource="{Binding Devices}"
+                        SelectionMode="Single"
+                        SelectionChanged="OnDeviceSelected">
 
             <CollectionView.Header>
-                <Label
-                    Text="یا یکی از دستگاه‌های پیدا‌شده را انتخاب کن"
-                    Margin="0,0,0,10"
-                    FontSize="14"
-                    FontAttributes="Bold"
-                    TextColor="#334155" />
+                <Label Text="دستگاه‌های پیدا‌شده در شبکه"
+                       Margin="0,0,0,10"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="#334155" />
             </CollectionView.Header>
 
             <CollectionView.EmptyView>
-                <VerticalStackLayout
-                    Spacing="8"
-                    Padding="10"
-                    VerticalOptions="Center"
-                    HorizontalOptions="Center">
+                <VerticalStackLayout Padding="12"
+                                     Spacing="8"
+                                     VerticalOptions="Center"
+                                     HorizontalOptions="Center">
 
-                    <Label
-                        Text="هنوز دستگاهی پیدا نشده است"
-                        FontSize="17"
-                        FontAttributes="Bold"
-                        TextColor="#334155"
-                        HorizontalTextAlignment="Center" />
+                    <Label Text="هنوز دستگاهی پیدا نشده است"
+                           FontSize="16"
+                           FontAttributes="Bold"
+                           TextColor="#334155"
+                           HorizontalTextAlignment="Center" />
 
-                    <Label
-                        Text="برای اتصال به گوشی، می‌توانی IP و کد اتصال را در قسمت بالا وارد کنی."
-                        FontSize="13"
-                        TextColor="#64748B"
-                        HorizontalTextAlignment="Center" />
-
+                    <Label Text="می‌توانی IP دستگاه را دستی وارد کنی."
+                           FontSize="13"
+                           TextColor="#64748B"
+                           HorizontalTextAlignment="Center" />
                 </VerticalStackLayout>
             </CollectionView.EmptyView>
 
             <CollectionView.ItemTemplate>
                 <DataTemplate>
+                    <Border Margin="0,0,0,8"
+                            Padding="13"
+                            BackgroundColor="White"
+                            Stroke="#E2E8F0"
+                            StrokeShape="RoundRectangle 14">
 
-                    <Border
-                        Margin="0,0,0,10"
-                        Padding="14"
-                        BackgroundColor="White"
-                        Stroke="#E2E8F0"
-                        StrokeThickness="1"
-                        StrokeShape="RoundRectangle 16">
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              ColumnSpacing="12">
 
-                        <Grid
-                            ColumnDefinitions="Auto,*,Auto"
-                            ColumnSpacing="12">
+                            <Border WidthRequest="44"
+                                    HeightRequest="44"
+                                    BackgroundColor="#EFF6FF"
+                                    StrokeThickness="0"
+                                    StrokeShape="RoundRectangle 12">
 
-                            <Border
-                                WidthRequest="48"
-                                HeightRequest="48"
-                                BackgroundColor="#EFF6FF"
-                                StrokeThickness="0"
-                                StrokeShape="RoundRectangle 13">
-
-                                <Label
-                                    Text="💻"
-                                    FontSize="24"
-                                    HorizontalTextAlignment="Center"
-                                    VerticalTextAlignment="Center" />
-
+                                <Label Text="💻"
+                                       FontSize="22"
+                                       HorizontalTextAlignment="Center"
+                                       VerticalTextAlignment="Center" />
                             </Border>
 
-                            <VerticalStackLayout
-                                Grid.Column="1"
-                                VerticalOptions="Center"
-                                Spacing="3">
+                            <VerticalStackLayout Grid.Column="1"
+                                                 VerticalOptions="Center"
+                                                 Spacing="3">
 
-                                <Label
-                                    Text="{Binding Name}"
-                                    FontSize="16"
-                                    FontAttributes="Bold"
-                                    TextColor="#172554" />
+                                <Label Text="{Binding Name}"
+                                       FontSize="15"
+                                       FontAttributes="Bold"
+                                       TextColor="#172554" />
 
-                                <Label
-                                    Text="{Binding Platform}"
-                                    FontSize="12"
-                                    TextColor="#64748B" />
+                                <Label Text="{Binding Platform}"
+                                       FontSize="12"
+                                       TextColor="#64748B" />
 
-                                <Label
-                                    Text="{Binding IpAddress}"
-                                    FontSize="12"
-                                    TextColor="#2563EB" />
-
+                                <Label Text="{Binding IpAddress}"
+                                       FontSize="12"
+                                       TextColor="#2563EB" />
                             </VerticalStackLayout>
 
-                            <Label
-                                Grid.Column="2"
-                                Text="›"
-                                FontSize="28"
-                                TextColor="#2563EB"
-                                VerticalOptions="Center" />
-
+                            <Label Grid.Column="2"
+                                   Text="›"
+                                   FontSize="26"
+                                   TextColor="#2563EB"
+                                   VerticalOptions="Center" />
                         </Grid>
-
                     </Border>
-
                 </DataTemplate>
             </CollectionView.ItemTemplate>
-
         </CollectionView>
 
-        <!-- لغو -->
-        <Button
-            Grid.Row="4"
-            Text="لغو"
-            Clicked="OnCancelClicked"
-            HeightRequest="48"
-            CornerRadius="13"
-            BackgroundColor="#475569"
-            TextColor="White"
-            FontSize="15"
-            FontAttributes="Bold" />
+        <Button Grid.Row="4"
+                Text="لغو"
+                Clicked="OnCancelClicked"
+                HeightRequest="48"
+                CornerRadius="13"
+                BackgroundColor="#475569"
+                TextColor="White"
+                FontSize="15"
+                FontAttributes="Bold" />
 
     </Grid>
-
 </ContentPage>

@@ -1,4 +1,5 @@
-﻿using MohsenShare.Maui.Services.Discovery;
+﻿
+using MohsenShare.Maui.Services.Discovery;
 using MohsenShare.Maui.Services.Transfer;
 using MohsenShare.Maui.ViewModels;
 using MohsenShare.Maui.Views;
@@ -12,7 +13,7 @@ namespace MohsenShare.Maui;
 public partial class MainPage : ContentPage
 {
     private readonly MainViewModel _viewModel;
-    private readonly LocalTransferService _transfer;
+    private readonly ITransferSessionService _transferSession;
     private readonly IDeviceDiscoveryService _discovery;
 
 #if ANDROID
@@ -21,7 +22,7 @@ public partial class MainPage : ContentPage
 
     public MainPage(
         MainViewModel viewModel,
-        LocalTransferService transfer,
+        ITransferSessionService transferSession,
         IDeviceDiscoveryService discovery
 #if ANDROID
         , LocalOnlyHotspotService hotspot
@@ -31,7 +32,7 @@ public partial class MainPage : ContentPage
         InitializeComponent();
 
         _viewModel = viewModel;
-        _transfer = transfer;
+        _transferSession = transferSession;
         _discovery = discovery;
 
 #if ANDROID
@@ -48,16 +49,33 @@ public partial class MainPage : ContentPage
 #if ANDROID
             await StartAndroidSendAsync();
 #else
-            await StartWindowsSendAsync();
+            await OpenDeviceSelectionAsync();
 #endif
         }
         catch (Exception ex)
         {
-            await DisplayAlertAsync(
-                "خطا در ارسال",
-                ex.Message,
-                "باشه");
+            await DisplayAlertAsync("خطا در ارسال", ex.Message, "باشه");
         }
+    }
+
+    private async void OnManualSendClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            await OpenDeviceSelectionAsync();
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync("خطا", ex.Message, "باشه");
+        }
+    }
+
+    private async Task OpenDeviceSelectionAsync()
+    {
+        await Navigation.PushModalAsync(
+            new DeviceSelectionPage(
+                _discovery,
+                _transferSession));
     }
 
 #if ANDROID
@@ -67,23 +85,16 @@ public partial class MainPage : ContentPage
 
         await DisplayAlertAsync(
             "شبکه آماده است",
-            $"دستگاه دریافت‌کننده باید به این شبکه متصل شود:\n\n" +
+            $"دستگاه دریافت‌کننده را به این شبکه وصل کن:\n\n" +
             $"نام شبکه: {hotspotInfo.Ssid}\n" +
             $"رمز شبکه: {hotspotInfo.Password}\n\n" +
-            "بعد از اتصال، QR دستگاه دریافت‌کننده را اسکن کن.",
+            "سپس QR صفحه دریافت را اسکن کن.",
             "باشه");
 
         await Navigation.PushModalAsync(
-            new ScanPage(_transfer));
+            new ScanPage(_transferSession));
     }
 #endif
-    private async Task StartWindowsSendAsync()
-    {
-        await Navigation.PushModalAsync(
-            new DeviceSelectionPage(
-                _discovery,
-                _transfer));
-    }
 
     private async void OnReceiveClicked(object sender, EventArgs e)
     {
@@ -100,25 +111,30 @@ public partial class MainPage : ContentPage
                 "باشه");
 #endif
 
-            // دریافت‌کننده هم در شبکه محلی قابل کشف می‌شود.
             await _discovery.StartAsync();
 
-            var result = await _transfer.StartReceiverAsync();
+            var connection = await _transferSession.StartListeningAsync(
+                localDeviceName: DeviceInfo.Current.Name);
 
             await Navigation.PushModalAsync(
                 new QrPage(
-                    _transfer,
-                    result.QrPng,
-                    result.Address,
-                    result.Token));
+                    _transferSession,
+                    connection));
         }
         catch (Exception ex)
         {
+            try
+            {
+                await _transferSession.DisconnectAsync();
+            }
+            catch
+            {
+                // حفظ خطای اصلی
+            }
+
 #if ANDROID
             _hotspot.Stop();
 #endif
-
-            await _discovery.StopAsync();
 
             await DisplayAlertAsync(
                 "خطا در شروع دریافت",
@@ -127,14 +143,14 @@ public partial class MainPage : ContentPage
         }
     }
 
+    private async void OnScanClicked(object sender, EventArgs e)
+    {
+        await _viewModel.ToggleScanningAsync();
+    }
+
     protected override void OnDisappearing()
     {
-        // عمداً Discovery و Transfer را اینجا متوقف نمی‌کنیم.
-        //
-        // اتصال نباید به lifecycle صفحه وابسته باشد.
-        //
-        // توقف واقعی فقط توسط صفحه/عملیات مربوط به اتصال انجام می‌شود.
-
+        // نشست انتقال به عمر صفحه اصلی وابسته نیست.
         base.OnDisappearing();
     }
 }
