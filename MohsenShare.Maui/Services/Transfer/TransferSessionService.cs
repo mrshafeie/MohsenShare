@@ -1812,15 +1812,41 @@ public sealed class TransferSessionService : ITransferSessionService
             : requestedName.Trim();
     }
 
+
     private static IPAddress? GetLocalIPv4Address()
     {
-        var candidates = new List<IPAddress>();
+        var candidates = new List<(
+            IPAddress Address,
+            string Name,
+            NetworkInterfaceType Type)>();
 
-        foreach (NetworkInterface networkInterface
-                 in NetworkInterface.GetAllNetworkInterfaces())
+        foreach (NetworkInterface ni in
+                 NetworkInterface.GetAllNetworkInterfaces())
         {
-            if (networkInterface.OperationalStatus !=
-                OperationalStatus.Up)
+            if (ni.OperationalStatus != OperationalStatus.Up)
+                continue;
+
+            // Prefer the Windows bridge when it owns the
+            // address used for the local transfer network.
+            bool isBridge =
+                ni.Name.Contains(
+                    "Network Bridge",
+                    StringComparison.OrdinalIgnoreCase);
+
+            // Ignore unrelated virtual adapters.
+            if (!isBridge &&
+                (ni.Name.Contains("VirtualBox",
+                    StringComparison.OrdinalIgnoreCase) ||
+                 ni.Name.Contains("Hyper-V",
+                    StringComparison.OrdinalIgnoreCase) ||
+                 ni.Name.Contains("VMware",
+                    StringComparison.OrdinalIgnoreCase) ||
+                 ni.Name.Contains("TAP-Windows",
+                    StringComparison.OrdinalIgnoreCase) ||
+                 ni.Name.Contains("Kerio",
+                    StringComparison.OrdinalIgnoreCase) ||
+                 ni.Name.StartsWith("vEthernet",
+                    StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
@@ -1829,7 +1855,7 @@ public sealed class TransferSessionService : ITransferSessionService
 
             try
             {
-                properties = networkInterface.GetIPProperties();
+                properties = ni.GetIPProperties();
             }
             catch (NetworkInformationException)
             {
@@ -1849,19 +1875,37 @@ public sealed class TransferSessionService : ITransferSessionService
 
                 byte[] bytes = address.GetAddressBytes();
 
-                // Skip IPv4 link-local addresses.
+                // Ignore automatic link-local addresses.
                 if (bytes[0] == 169 && bytes[1] == 254)
                     continue;
 
-                candidates.Add(address);
+                candidates.Add((address, ni.Name, ni.NetworkInterfaceType));
             }
         }
 
-        // Prefer private LAN addresses for local transfer.
-        return candidates.FirstOrDefault(IsPrivateIPv4)
-            ?? candidates.FirstOrDefault();
-    }
+        // 1. The bridge used by this Windows setup.
+        var bridge = candidates.FirstOrDefault(c =>
+            c.Name.Contains(
+                "Network Bridge",
+                StringComparison.OrdinalIgnoreCase));
 
+        if (bridge.Address != null)
+            return bridge.Address;
+
+        // 2. A regular Wi-Fi interface, when no bridge is present.
+        var wifi = candidates.FirstOrDefault(c =>
+            c.Type == NetworkInterfaceType.Wireless80211);
+
+        if (wifi.Address != null)
+            return wifi.Address;
+
+        // 3. Fall back to another private IPv4 address.
+        return candidates
+            .Where(c => IsPrivateIPv4(c.Address))
+            .Select(c => c.Address)
+            .FirstOrDefault()
+            ?? candidates.Select(c => c.Address).FirstOrDefault();
+    }
     private static bool IsPrivateIPv4(IPAddress address)
     {
         byte[] b = address.GetAddressBytes();

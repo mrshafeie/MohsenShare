@@ -225,7 +225,7 @@ public partial class DeviceSelectionPage : ContentPage
             {
                 _queueCancellation.Token.ThrowIfCancellationRequested();
 
-                string safeName = Path.GetFileName(file.FileName);
+                string safeName = Path.GetFileName(file!.FileName);
 
                 if (string.IsNullOrWhiteSpace(safeName))
                     safeName = "file";
